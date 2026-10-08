@@ -1,10 +1,8 @@
 name: CI
 
+# Manual only: no automatic runs on push or pull request (cost). Run it from
+# the Actions tab (or `gh workflow run CI --ref <branch>`) when deciding a merge.
 on:
-  push:
-    branches:
-      - main
-  pull_request:
   workflow_dispatch:
 
 permissions:
