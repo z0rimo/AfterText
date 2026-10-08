@@ -140,6 +140,7 @@ Not implemented, planned for later releases: dialogue / character model, multipl
 - [`docs/CORE_SPEC.md`](docs/CORE_SPEC.md) — the canonical specification (language, AST, diagnostics, runtime, player, renderer). Section numbers are stable.
 - [`CONTRIBUTING.md`](CONTRIBUTING.md) — setup, commands, tests, the public API baseline, and pull request conventions.
 - [`SECURITY.md`](SECURITY.md) — reporting security problems.
+- [`CODE_OF_CONDUCT.md`](CODE_OF_CONDUCT.md) — community standards.
 
 ```bash
 npm ci

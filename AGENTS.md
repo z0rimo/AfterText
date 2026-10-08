@@ -103,4 +103,4 @@ git diff --check
 
 ## Git
 
-Make focused commits. Use conventional commit style (`type(scope): lowercase description`, for example `fix(compiler): validate frontmatter state keys`) for commits and pull request titles. Do not rewrite shared history. See `CONTRIBUTING.md` for the pull request workflow.
+Make focused commits. Use conventional commit style (`type(scope): lowercase description`, for example `fix(compiler): validate frontmatter state keys`) for commits and pull request titles. Do not rewrite shared history. See `CONTRIBUTING.md` for the pull request workflow and for which changes need an accepted issue or design discussion first.

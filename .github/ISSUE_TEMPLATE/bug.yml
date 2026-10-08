@@ -1,0 +1,84 @@
+name: Bug report
+description: Something does not work as documented
+title: "bug: "
+labels: ["type: bug", "status: needs-triage"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for taking the time to report a bug. A minimal reproduction makes it much easier to fix.
+
+        **Please do not include secrets, credentials, or private story content.** Security problems should not be reported here; see the [security policy](https://github.com/z0rimo/AfterText/security/policy).
+  - type: dropdown
+    id: area
+    attributes:
+      label: Package / area
+      description: Where does the problem appear?
+      options:
+        - compiler
+        - runtime
+        - player
+        - web-renderer
+        - documentation
+        - packaging/tooling
+    validations:
+      required: true
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened?
+      description: A short description of the problem.
+    validations:
+      required: true
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Minimal reproduction
+      description: The smallest source and code that shows the problem, and the steps to run it. A link to a small repository is fine too.
+      placeholder: |
+        1. Compile the `.at` source below...
+        2. Call ...
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior
+    validations:
+      required: true
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual behavior
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: AfterText package and version
+      description: For example `@aftertext/compiler@0.1.1`.
+    validations:
+      required: true
+  - type: input
+    id: node
+    attributes:
+      label: Node.js version
+      description: Output of `node --version` (and the browser, for `web-renderer` problems).
+    validations:
+      required: true
+  - type: textarea
+    id: source
+    attributes:
+      label: Relevant `.at` source
+      description: Optional, but strongly recommended when the problem involves a story.
+      render: text
+  - type: textarea
+    id: diagnostics
+    attributes:
+      label: Diagnostics or errors
+      description: Compiler diagnostics (code, message, span), runtime errors, stack traces, or console output.
+      render: text
+  - type: textarea
+    id: context
+    attributes:
+      label: Additional context
