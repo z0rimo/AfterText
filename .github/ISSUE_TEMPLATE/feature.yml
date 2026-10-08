@@ -1,0 +1,53 @@
+name: Feature request
+description: Suggest an idea or an improvement
+title: "feat: "
+labels: ["type: feature", "status: needs-triage"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Please describe the **problem** and the **behavior you would like** before any implementation details; the best solution is often found in the discussion.
+
+        If the idea changes the language, the AST, a public API, or runtime semantics, the [design proposal](https://github.com/z0rimo/AfterText/issues/new?template=design.yml) form is a better fit.
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem / motivation
+      description: What are you trying to do, and what gets in the way today?
+    validations:
+      required: true
+  - type: textarea
+    id: behavior
+    attributes:
+      label: Proposed behavior
+      description: What should happen, from the point of view of someone using AfterText?
+    validations:
+      required: true
+  - type: textarea
+    id: use-case
+    attributes:
+      label: Example use case
+      description: A small story or scenario where this would help.
+    validations:
+      required: true
+  - type: textarea
+    id: syntax
+    attributes:
+      label: Possible syntax or API
+      description: Optional. A sketch is enough.
+      render: text
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered
+  - type: checkboxes
+    id: packages
+    attributes:
+      label: Affected packages
+      description: Optional.
+      options:
+        - label: compiler
+        - label: runtime
+        - label: player
+        - label: web-renderer
+        - label: documentation

@@ -1,0 +1,93 @@
+name: Design proposal
+description: Propose a change to the DSL, AST, public API, or runtime/player/renderer semantics
+title: "design: "
+labels: ["type: design", "status: needs-triage"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Use this form for changes that need agreement before implementation: DSL syntax, AST shape, public API, runtime semantics, the player contract, renderer presentation semantics, new presentation commands, or package boundaries.
+
+        A pull request is welcome once the direction is accepted. Starting from the problem (rather than a finished patch) keeps the discussion cheap for everyone.
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem
+      description: What cannot be done (or is awkward) today?
+    validations:
+      required: true
+  - type: textarea
+    id: semantics
+    attributes:
+      label: Proposed semantics
+      description: Precisely what should happen, including edge cases and diagnostics for invalid input.
+    validations:
+      required: true
+  - type: textarea
+    id: example
+    attributes:
+      label: Example source or API
+      description: An `.at` snippet and/or TypeScript signature showing the proposal in use.
+      render: text
+    validations:
+      required: true
+  - type: dropdown
+    id: breaking
+    attributes:
+      label: Is this additive or breaking?
+      options:
+        - Additive (existing sources and APIs keep working)
+        - Breaking (some existing source or API changes behavior)
+        - Not sure
+    validations:
+      required: true
+  - type: dropdown
+    id: state
+    attributes:
+      label: Does it change serialized or runtime state?
+      description: StoryState, ReaderState, the player state, or anything a future save/load would persist.
+      options:
+        - "No"
+        - "Yes"
+        - Not sure
+    validations:
+      required: true
+  - type: dropdown
+    id: spec
+    attributes:
+      label: Does it require a CORE_SPEC change?
+      options:
+        - "No"
+        - "Yes"
+        - Not sure
+    validations:
+      required: true
+  - type: textarea
+    id: compatibility
+    attributes:
+      label: Compatibility impact
+      description: Who would be affected, and how (source files, AST consumers, API users, existing diagnostics)?
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives
+      description: Other approaches considered, including doing nothing.
+    validations:
+      required: true
+  - type: dropdown
+    id: layers
+    attributes:
+      label: Affected layers
+      description: Select every layer that would change.
+      multiple: true
+      options:
+        - compiler
+        - runtime
+        - player
+        - web-renderer
+        - spec
+        - package API
+    validations:
+      required: true
