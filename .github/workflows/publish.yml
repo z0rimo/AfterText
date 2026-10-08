@@ -36,7 +36,7 @@ jobs:
               exit 1
             fi
           done
-      - run: npm ci
+      - run: npm ci --ignore-scripts
       - run: npm run build
       - run: npm test
       - run: npm run typecheck
@@ -56,14 +56,16 @@ jobs:
           node-version: 24
           cache: npm
           registry-url: https://registry.npmjs.org
-      - name: Trusted Publishing needs npm >= 11.5.1
+      - name: Trusted Publishing needs npm >= 11.5.1 (fail closed; nothing is installed here)
         run: |
-          npm --version
-          if ! npx --yes semver -r ">=11.5.1" "$(npm --version)" >/dev/null 2>&1; then
-            npm install -g npm@^11.5.1
-            npm --version
+          required="11.5.1"
+          current="$(npm --version)"
+          echo "npm $current (required: >= $required)"
+          if [ "$(printf '%s\n%s\n' "$required" "$current" | sort -V | head -n 1)" != "$required" ]; then
+            echo "::error::npm $current is older than $required, which npm Trusted Publishing needs. Not publishing."
+            exit 1
           fi
-      - run: npm ci
+      - run: npm ci --ignore-scripts
       - run: npm run build
       - name: Publish (dependency order; skips versions that already exist, so a failed run can be re-run)
         run: |
