@@ -5,7 +5,7 @@ A web-native, prose-first engine and toolchain for interactive stories and visua
 [![npm](https://img.shields.io/npm/v/@aftertext/compiler?label=npm)](https://www.npmjs.com/package/@aftertext/compiler)
 [![CI](https://github.com/z0rimo/AfterText/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/z0rimo/AfterText/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/github/license/z0rimo/AfterText)](LICENSE)
-[![Node](https://img.shields.io/badge/node-%3E%3D20.19-339933)](CONTRIBUTING.md)
+[![Node](https://img.shields.io/badge/node-%3E%3D22.12-339933)](CONTRIBUTING.md)
 
 > **v0.1.1 — foundation release.** The core pipeline works end to end, but the project is early: the language, APIs, and feature set are small and will change. It is not production-ready.
 
@@ -68,7 +68,7 @@ npm install @aftertext/compiler @aftertext/player
 npm install @aftertext/web-renderer react react-dom   # browser rendering (React 18 or 19)
 ```
 
-Requires Node.js 20.19 or newer for the toolchain.
+Requires Node.js 22.12 or newer for the toolchain (Node 24 LTS recommended). The published packages do not declare an `engines` restriction.
 
 ## Quick start
 
