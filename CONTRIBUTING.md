@@ -55,7 +55,7 @@ Branch from `main` using one of these prefixes. There is no `develop` branch. A 
 
 ## Environment
 
-- Node.js 20.19 or newer (CI runs 20.19.0, 22, and 24).
+- Node.js 22.12 or newer; Node 24 LTS is recommended. A manual CI run covers Node 22 (default) or 22.12.0 and 24 (`test_scope=all`).
 - npm (workspaces). No global tools are required.
 
 ```bash
@@ -117,7 +117,7 @@ Do not refresh a baseline to silence an unexplained difference. Types, interface
 - Use conventional-commit style for commit messages and PR titles: `type(scope): lowercase description` (`feat(compiler): ...`, `fix(runtime): ...`, `docs: ...`, `test: ...`, `refactor: ...`, `ci: ...`, `chore: ...`).
 - Fill in the pull request template: what changed, how you validated it, and any compatibility impact.
 - Include tests, update the specification when a contract changes, and run `build`, `test`, `typecheck`, and (when package behavior changes) `verify:pack`.
-- CI must pass on Node 20.19.0, 22, and 24, and review conversations must be resolved before merging.
+- CI is manual-only; run it with `test_scope=all` (Node 22.12.0 and 24) before merging, and review conversations must be resolved before merging.
 - Pull requests are merged with a merge commit.
 
 ## License

@@ -4,6 +4,15 @@ name: CI
 # the Actions tab (or `gh workflow run CI --ref <branch>`) when deciding a merge.
 on:
   workflow_dispatch:
+    inputs:
+      test_scope:
+        description: Node test scope
+        type: choice
+        required: true
+        default: node22
+        options:
+          - node22
+          - all
 
 permissions:
   contents: read
@@ -14,8 +23,8 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        # Lowest supported version, Maintenance LTS, and Active LTS.
-        node: ["20.19.0", "22", "24"]
+        # node22: latest 22.x. all: lowest supported (22.12.0) and Active LTS (24).
+        node: ${{ fromJSON(inputs.test_scope == 'all' && '["22.12.0","24"]' || '["22"]') }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
