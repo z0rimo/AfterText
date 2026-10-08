@@ -1,0 +1,27 @@
+{
+  "name": "aftertext",
+  "private": true,
+  "version": "0.1.0",
+  "description": "AfterText: a prose-first authoring format for cinematic and stateful web stories.",
+  "license": "MIT",
+  "type": "module",
+  "workspaces": [
+    "packages/*"
+  ],
+  "scripts": {
+    "build": "tsc -b",
+    "pretest": "npm run build",
+    "test": "npm run test --workspaces --if-present && npm run test:api",
+    "pretypecheck": "npm run build",
+    "typecheck": "npm run typecheck --workspaces --if-present",
+    "verify:pack": "node scripts/verify-pack.mjs",
+    "test:api": "node --test scripts/api-surface.test.mjs",
+    "api:update": "npm run build && node scripts/api-surface.mjs --update"
+  },
+  "devDependencies": {
+    "typescript": "^5.6.3"
+  },
+  "engines": {
+    "node": ">=20.19.0"
+  }
+}

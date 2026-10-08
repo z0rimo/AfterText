@@ -1,0 +1,45 @@
+{
+  "name": "@aftertext/compiler",
+  "version": "0.1.1",
+  "description": "AfterText compiler: parses AfterText source into a validated Story AST.",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/z0rimo/AfterText.git",
+    "directory": "packages/compiler"
+  },
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "publishConfig": {
+    "access": "public"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "prepack": "tsc -b --force",
+    "typecheck": "tsc -p tsconfig.typecheck.json",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "mdast-util-to-string": "^4.0.0",
+    "unified": "^11.0.5",
+    "remark-parse": "^11.0.0",
+    "yaml": "^2.5.1"
+  },
+  "devDependencies": {
+    "@types/mdast": "^4.0.4",
+    "@types/unist": "^3.0.3",
+    "@types/node": "^22.7.5",
+    "typescript": "^5.6.3",
+    "vitest": "^2.1.2"
+  }
+}

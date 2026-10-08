@@ -1,0 +1,492 @@
+{
+  "package": "@aftertext/compiler",
+  "packageExports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "exports": {
+    "BackgroundCommand": {
+      "kind": "interface",
+      "members": [
+        "readonly property image: string",
+        "readonly property type: \"Background\""
+      ]
+    },
+    "BinaryExpression": {
+      "kind": "interface",
+      "members": [
+        "readonly property left: BinaryExpression | CallExpression | IdentifierExpression | LiteralExpression | UnaryExpression",
+        "readonly property operator: \"!=\" | \"%\" | \"&&\" | \"*\" | \"+\" | \"-\" | \"/\" | \"<\" | \"<=\" | \"==\" | \">\" | \">=\" | \"||\"",
+        "readonly property right: BinaryExpression | CallExpression | IdentifierExpression | LiteralExpression | UnaryExpression",
+        "readonly property span: SourceSpan",
+        "readonly property type: \"Binary\""
+      ]
+    },
+    "BinaryOperator": {
+      "kind": "type",
+      "members": [
+        "union \"!=\"",
+        "union \"%\"",
+        "union \"&&\"",
+        "union \"*\"",
+        "union \"+\"",
+        "union \"-\"",
+        "union \"/\"",
+        "union \"<\"",
+        "union \"<=\"",
+        "union \"==\"",
+        "union \">\"",
+        "union \">=\"",
+        "union \"||\""
+      ]
+    },
+    "CallExpression": {
+      "kind": "interface",
+      "members": [
+        "readonly property args: readonly ExpressionNode[]",
+        "readonly property callee: string",
+        "readonly property span: SourceSpan",
+        "readonly property type: \"Call\""
+      ]
+    },
+    "CameraAction": {
+      "kind": "type",
+      "members": [
+        "type \"zoom\""
+      ]
+    },
+    "CameraCommand": {
+      "kind": "type",
+      "members": [
+        "type CameraZoomCommand"
+      ]
+    },
+    "CameraZoomCommand": {
+      "kind": "interface",
+      "members": [
+        "readonly property action: \"zoom\"",
+        "readonly property durationMs: number",
+        "readonly property to: number",
+        "readonly property type: \"Camera\""
+      ]
+    },
+    "ChoiceItem": {
+      "kind": "interface",
+      "members": [
+        "readonly property condition: BinaryExpression | CallExpression | IdentifierExpression | LiteralExpression | UnaryExpression",
+        "readonly property conditionSourceSpan?: SourceSpan",
+        "readonly property span: SourceSpan",
+        "readonly property target: string",
+        "readonly property text: string"
+      ]
+    },
+    "ChoiceNode": {
+      "kind": "interface",
+      "members": [
+        "readonly property items: readonly ChoiceItem[]",
+        "readonly property span: SourceSpan",
+        "readonly property type: \"Choice\""
+      ]
+    },
+    "CompileResult": {
+      "kind": "interface",
+      "members": [
+        "readonly property diagnostics: readonly Diagnostic[]",
+        "readonly property document: StoryDocument",
+        "readonly property hasErrors: boolean"
+      ]
+    },
+    "ConditionalBranch": {
+      "kind": "interface",
+      "members": [
+        "readonly property blocks: readonly StoryBlock[]",
+        "readonly property condition: BinaryExpression | CallExpression | IdentifierExpression | LiteralExpression | UnaryExpression",
+        "readonly property conditionSourceSpan?: SourceSpan",
+        "readonly property followingLineEnding?: \"\" | \"\\n\" | \"\\r\\n\"",
+        "readonly property kind: \"else\" | \"elseif\" | \"if\"",
+        "readonly property span: SourceSpan"
+      ]
+    },
+    "ConditionalBranchKind": {
+      "kind": "type",
+      "members": [
+        "union \"else\"",
+        "union \"elseif\"",
+        "union \"if\""
+      ]
+    },
+    "ConditionalNode": {
+      "kind": "interface",
+      "members": [
+        "readonly property branches: readonly ConditionalBranch[]",
+        "readonly property span: SourceSpan",
+        "readonly property type: \"Conditional\""
+      ]
+    },
+    "Diagnostic": {
+      "kind": "interface",
+      "members": [
+        "readonly property code: \"AT1001\" | \"AT1002\" | \"AT1003\" | \"AT1004\" | \"AT1005\" | \"AT1006\" | \"AT1101\" | \"AT1102\" | \"AT1103\" | \"AT1104\" | \"AT1201\" | \"AT1202\" | \"AT1301\" | \"AT1302\" | \"AT2001\" | \"AT2002\" | \"AT2003\" | \"AT2004\" | \"AT2005\" | \"AT3001\"",
+        "readonly property message: string",
+        "readonly property severity: \"error\" | \"warning\"",
+        "readonly property span: SourceSpan"
+      ]
+    },
+    "DiagnosticCode": {
+      "kind": "type",
+      "members": [
+        "union \"AT1001\"",
+        "union \"AT1002\"",
+        "union \"AT1003\"",
+        "union \"AT1004\"",
+        "union \"AT1005\"",
+        "union \"AT1006\"",
+        "union \"AT1101\"",
+        "union \"AT1102\"",
+        "union \"AT1103\"",
+        "union \"AT1104\"",
+        "union \"AT1201\"",
+        "union \"AT1202\"",
+        "union \"AT1301\"",
+        "union \"AT1302\"",
+        "union \"AT2001\"",
+        "union \"AT2002\"",
+        "union \"AT2003\"",
+        "union \"AT2004\"",
+        "union \"AT2005\"",
+        "union \"AT3001\""
+      ]
+    },
+    "DiagnosticSeverity": {
+      "kind": "type",
+      "members": [
+        "union \"error\"",
+        "union \"warning\""
+      ]
+    },
+    "EmphasisInline": {
+      "kind": "interface",
+      "members": [
+        "readonly property children: readonly InlineNode[]",
+        "readonly property span: SourceSpan",
+        "readonly property type: \"Emphasis\""
+      ]
+    },
+    "ExpressionNode": {
+      "kind": "type",
+      "members": [
+        "union BinaryExpression",
+        "union CallExpression",
+        "union IdentifierExpression",
+        "union LiteralExpression",
+        "union UnaryExpression"
+      ]
+    },
+    "GotoNode": {
+      "kind": "interface",
+      "members": [
+        "readonly property span: SourceSpan",
+        "readonly property target: string",
+        "readonly property targetSourceSpan: SourceSpan",
+        "readonly property type: \"Goto\""
+      ]
+    },
+    "HeadingNode": {
+      "kind": "interface",
+      "members": [
+        "readonly property children: readonly InlineNode[]",
+        "readonly property contentSourceSpan: SourceSpan",
+        "readonly property depth: 1 | 2 | 3 | 4 | 5 | 6",
+        "readonly property levelSourceSpan: SourceSpan",
+        "readonly property span: SourceSpan",
+        "readonly property type: \"Heading\""
+      ]
+    },
+    "IdentifierExpression": {
+      "kind": "interface",
+      "members": [
+        "readonly property name: string",
+        "readonly property span: SourceSpan",
+        "readonly property type: \"Identifier\""
+      ]
+    },
+    "InlineCodeInline": {
+      "kind": "interface",
+      "members": [
+        "readonly property span: SourceSpan",
+        "readonly property type: \"InlineCode\"",
+        "readonly property value: string"
+      ]
+    },
+    "InlineNode": {
+      "kind": "type",
+      "members": [
+        "union EmphasisInline",
+        "union InlineCodeInline",
+        "union LineBreakInline",
+        "union LinkInline",
+        "union StrongInline",
+        "union TextInline"
+      ]
+    },
+    "LayerCommand": {
+      "kind": "interface",
+      "members": [
+        "readonly property image: string",
+        "readonly property type: \"Layer\""
+      ]
+    },
+    "LineBreakInline": {
+      "kind": "interface",
+      "members": [
+        "readonly property span: SourceSpan",
+        "readonly property type: \"LineBreak\""
+      ]
+    },
+    "LinkInline": {
+      "kind": "interface",
+      "members": [
+        "readonly property children: readonly InlineNode[]",
+        "readonly property span: SourceSpan",
+        "readonly property type: \"Link\"",
+        "readonly property url: string"
+      ]
+    },
+    "LiteralExpression": {
+      "kind": "interface",
+      "members": [
+        "readonly property span: SourceSpan",
+        "readonly property type: \"Literal\"",
+        "readonly property value: boolean | number | string"
+      ]
+    },
+    "LiteralValue": {
+      "kind": "type",
+      "members": [
+        "union false",
+        "union number",
+        "union string",
+        "union true"
+      ]
+    },
+    "MusicCommand": {
+      "kind": "interface",
+      "members": [
+        "readonly property track: string",
+        "readonly property type: \"Music\"",
+        "readonly property volume: number"
+      ]
+    },
+    "ParagraphNode": {
+      "kind": "interface",
+      "members": [
+        "readonly property children: readonly InlineNode[]",
+        "readonly property span: SourceSpan",
+        "readonly property type: \"Paragraph\""
+      ]
+    },
+    "PauseCommand": {
+      "kind": "interface",
+      "members": [
+        "readonly property durationMs: number",
+        "readonly property type: \"Pause\""
+      ]
+    },
+    "PresentationCommand": {
+      "kind": "type",
+      "members": [
+        "union BackgroundCommand",
+        "union CameraZoomCommand",
+        "union LayerCommand",
+        "union MusicCommand",
+        "union PauseCommand",
+        "union SfxCommand"
+      ]
+    },
+    "PresentationNode": {
+      "kind": "interface",
+      "members": [
+        "readonly property argumentsEndPosition?: SourcePosition",
+        "readonly property command: BackgroundCommand | CameraZoomCommand | LayerCommand | MusicCommand | PauseCommand | SfxCommand",
+        "readonly property commandRemovalSpan?: SourceSpan",
+        "readonly property contiguousPositionalSpan?: SourceSpan",
+        "readonly property parameterRemovalSpans?: Readonly<Record<string, SourceSpan>>",
+        "readonly property parameterValueSpans?: Readonly<Record<string, SourceSpan>>",
+        "readonly property positionalValueSpan?: SourceSpan",
+        "readonly property span: SourceSpan",
+        "readonly property type: \"Presentation\""
+      ]
+    },
+    "SceneNode": {
+      "kind": "interface",
+      "members": [
+        "readonly property blocks: readonly StoryBlock[]",
+        "readonly property followingLineEnding?: \"\" | \"\\n\" | \"\\r\\n\"",
+        "readonly property id: string",
+        "readonly property span: SourceSpan",
+        "readonly property type: \"Scene\""
+      ]
+    },
+    "SetNode": {
+      "kind": "interface",
+      "members": [
+        "readonly property expression: BinaryExpression | CallExpression | IdentifierExpression | LiteralExpression | UnaryExpression",
+        "readonly property expressionSourceSpan: SourceSpan",
+        "readonly property name: string",
+        "readonly property nameSourceSpan: SourceSpan",
+        "readonly property span: SourceSpan",
+        "readonly property type: \"Set\""
+      ]
+    },
+    "SfxCommand": {
+      "kind": "interface",
+      "members": [
+        "readonly property clip: string",
+        "readonly property type: \"Sfx\""
+      ]
+    },
+    "SourcePosition": {
+      "kind": "interface",
+      "members": [
+        "readonly property column: number",
+        "readonly property line: number",
+        "readonly property offset: number"
+      ]
+    },
+    "SourceSpan": {
+      "kind": "interface",
+      "members": [
+        "readonly property end: SourcePosition",
+        "readonly property start: SourcePosition"
+      ]
+    },
+    "StateValue": {
+      "kind": "type",
+      "members": [
+        "union false",
+        "union number",
+        "union string",
+        "union true"
+      ]
+    },
+    "StoryBlock": {
+      "kind": "type",
+      "members": [
+        "union ChoiceNode",
+        "union ConditionalNode",
+        "union GotoNode",
+        "union HeadingNode",
+        "union ParagraphNode",
+        "union PresentationNode",
+        "union SetNode",
+        "union VariantNode"
+      ]
+    },
+    "StoryDocument": {
+      "kind": "interface",
+      "members": [
+        "readonly property entryScene: string",
+        "readonly property initialState: Readonly<Record<string, StateValue>>",
+        "readonly property metadata: StoryMetadata",
+        "readonly property scenes: readonly SceneNode[]",
+        "readonly property type: \"StoryDocument\""
+      ]
+    },
+    "StoryMetadata": {
+      "kind": "interface",
+      "members": [
+        "readonly property entry: string",
+        "readonly property span: SourceSpan",
+        "readonly property title: string"
+      ]
+    },
+    "StoryStateDefinition": {
+      "kind": "type",
+      "members": [
+        "readonly index [string]: boolean | number | string"
+      ]
+    },
+    "StrongInline": {
+      "kind": "interface",
+      "members": [
+        "readonly property children: readonly InlineNode[]",
+        "readonly property span: SourceSpan",
+        "readonly property type: \"Strong\""
+      ]
+    },
+    "TextInline": {
+      "kind": "interface",
+      "members": [
+        "readonly property span: SourceSpan",
+        "readonly property type: \"Text\"",
+        "readonly property value: string"
+      ]
+    },
+    "UnaryExpression": {
+      "kind": "interface",
+      "members": [
+        "readonly property argument: BinaryExpression | CallExpression | IdentifierExpression | LiteralExpression | UnaryExpression",
+        "readonly property operator: \"!\" | \"-\"",
+        "readonly property span: SourceSpan",
+        "readonly property type: \"Unary\""
+      ]
+    },
+    "UnaryOperator": {
+      "kind": "type",
+      "members": [
+        "union \"!\"",
+        "union \"-\""
+      ]
+    },
+    "VariantBranch": {
+      "kind": "interface",
+      "members": [
+        "readonly property blocks: readonly StoryBlock[]",
+        "readonly property branchId: string",
+        "readonly property condition: BinaryExpression | CallExpression | IdentifierExpression | LiteralExpression | UnaryExpression",
+        "readonly property conditionSourceSpan?: SourceSpan",
+        "readonly property followingLineEnding?: \"\" | \"\\n\" | \"\\r\\n\"",
+        "readonly property kind: \"otherwise\" | \"when\"",
+        "readonly property span: SourceSpan"
+      ]
+    },
+    "VariantBranchKind": {
+      "kind": "type",
+      "members": [
+        "union \"otherwise\"",
+        "union \"when\""
+      ]
+    },
+    "VariantNode": {
+      "kind": "interface",
+      "members": [
+        "readonly property branches: readonly VariantBranch[]",
+        "readonly property id: string",
+        "readonly property idSourceSpan: SourceSpan",
+        "readonly property span: SourceSpan",
+        "readonly property type: \"Variant\""
+      ]
+    },
+    "compile": {
+      "kind": "function",
+      "members": [
+        "signature (string) => CompileResult"
+      ]
+    },
+    "isChoiceTargetBoundarySafe": {
+      "kind": "function",
+      "members": [
+        "signature (string) => boolean"
+      ]
+    },
+    "isPresentationNamedArgumentValueBoundarySafe": {
+      "kind": "function",
+      "members": [
+        "signature (string) => boolean"
+      ]
+    }
+  },
+  "referencedTypes": {}
+}

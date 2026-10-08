@@ -1,0 +1,25 @@
+{
+  "package": "@aftertext/web-renderer",
+  "packageExports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "exports": {
+    "AfterTextPlayer": {
+      "kind": "function",
+      "members": [
+        "signature (AfterTextPlayerProps) => ReactElement<unknown, string | JSXElementConstructor<any>>"
+      ]
+    },
+    "AfterTextPlayerProps": {
+      "kind": "interface",
+      "members": [
+        "readonly property document: StoryDocument",
+        "readonly property resolveAsset?: (string, \"background\" | \"layer\" | \"music\" | \"sfx\") => string"
+      ]
+    }
+  },
+  "referencedTypes": {}
+}

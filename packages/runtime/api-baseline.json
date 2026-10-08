@@ -1,0 +1,292 @@
+{
+  "package": "@aftertext/runtime",
+  "packageExports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "exports": {
+    "AdvanceOptions": {
+      "kind": "interface",
+      "members": [
+        "readonly property stepBudget?: number"
+      ]
+    },
+    "AvailableChoiceItem": {
+      "kind": "interface",
+      "members": [
+        "readonly property index: number",
+        "readonly property target: string",
+        "readonly property text: string"
+      ]
+    },
+    "ChoiceResult": {
+      "kind": "interface",
+      "members": [
+        "readonly property items: readonly AvailableChoiceItem[]",
+        "readonly property type: \"choice\""
+      ]
+    },
+    "CompletedResult": {
+      "kind": "interface",
+      "members": [
+        "readonly property type: \"completed\""
+      ]
+    },
+    "ContentResult": {
+      "kind": "interface",
+      "members": [
+        "readonly property block: HeadingNode | ParagraphNode",
+        "readonly property type: \"content\""
+      ]
+    },
+    "ErrorResult": {
+      "kind": "interface",
+      "members": [
+        "readonly property error: RuntimeExecutionError",
+        "readonly property type: \"error\""
+      ]
+    },
+    "EvaluationContext": {
+      "kind": "interface",
+      "members": [
+        "readonly property document: StoryDocument",
+        "readonly property reader: ReaderState",
+        "readonly property story: Readonly<Record<string, StateValue>>"
+      ]
+    },
+    "ExecutionCursor": {
+      "kind": "type",
+      "members": [
+        "type readonly CursorFrame[]"
+      ]
+    },
+    "ExecutionResult": {
+      "kind": "type",
+      "members": [
+        "union ChoiceResult",
+        "union CompletedResult",
+        "union ContentResult",
+        "union ErrorResult",
+        "union NavigationResult",
+        "union PresentationResult"
+      ]
+    },
+    "ExecutionStep": {
+      "kind": "interface",
+      "members": [
+        "readonly property cursor: ExecutionCursor",
+        "readonly property result: ChoiceResult | CompletedResult | ContentResult | ErrorResult | NavigationResult | PresentationResult",
+        "readonly property runtimeState: RuntimeState"
+      ]
+    },
+    "INITIAL_CURSOR": {
+      "kind": "const",
+      "members": [
+        "type ExecutionCursor"
+      ]
+    },
+    "NavigationResult": {
+      "kind": "interface",
+      "members": [
+        "readonly property from: string",
+        "readonly property to: string",
+        "readonly property type: \"navigation\""
+      ]
+    },
+    "NavigationState": {
+      "kind": "interface",
+      "members": [
+        "readonly property sceneId: string"
+      ]
+    },
+    "PresentationResult": {
+      "kind": "interface",
+      "members": [
+        "readonly property command: BackgroundCommand | CameraZoomCommand | LayerCommand | MusicCommand | PauseCommand | SfxCommand",
+        "readonly property type: \"presentation\""
+      ]
+    },
+    "ReaderState": {
+      "kind": "interface",
+      "members": [
+        "readonly property seenVariants: Readonly<Record<string, VariantMemory>>",
+        "readonly property visitedScenes: Readonly<Record<string, SceneVisitMemory>>"
+      ]
+    },
+    "ResolvedVariant": {
+      "kind": "interface",
+      "members": [
+        "readonly property blocks: readonly StoryBlock[]",
+        "readonly property branchId: string",
+        "readonly property variantId: string"
+      ]
+    },
+    "RuntimeErrors": {
+      "kind": "const",
+      "members": [
+        "readonly property divisionByZero: (SourceSpan?) => RuntimeExecutionError",
+        "readonly property emptyChoice: (SourceSpan?) => RuntimeExecutionError",
+        "readonly property invalidArithmeticResult: (SourceSpan?) => RuntimeExecutionError",
+        "readonly property invalidChoiceSelection: (string) => RuntimeExecutionError",
+        "readonly property invalidSceneTarget: (string, SourceSpan?) => RuntimeExecutionError",
+        "readonly property invalidVariantReference: (string, SourceSpan?) => RuntimeExecutionError",
+        "readonly property stepLimitExceeded: () => RuntimeExecutionError",
+        "readonly property typeMismatch: (string, SourceSpan?) => RuntimeExecutionError",
+        "readonly property unknownBuiltin: (string, SourceSpan?) => RuntimeExecutionError",
+        "readonly property unknownIdentifier: (string, SourceSpan?) => RuntimeExecutionError"
+      ]
+    },
+    "RuntimeExecutionError": {
+      "kind": "interface",
+      "members": [
+        "readonly property kind: \"division-by-zero\" | \"empty-choice\" | \"invalid-arithmetic-result\" | \"invalid-choice-selection\" | \"invalid-scene-target\" | \"invalid-variant-reference\" | \"step-limit-exceeded\" | \"type-mismatch\" | \"unknown-builtin\" | \"unknown-identifier\"",
+        "readonly property message: string",
+        "readonly property span?: SourceSpan"
+      ]
+    },
+    "RuntimeExecutionErrorKind": {
+      "kind": "type",
+      "members": [
+        "union \"division-by-zero\"",
+        "union \"empty-choice\"",
+        "union \"invalid-arithmetic-result\"",
+        "union \"invalid-choice-selection\"",
+        "union \"invalid-scene-target\"",
+        "union \"invalid-variant-reference\"",
+        "union \"step-limit-exceeded\"",
+        "union \"type-mismatch\"",
+        "union \"unknown-builtin\"",
+        "union \"unknown-identifier\""
+      ]
+    },
+    "RuntimeState": {
+      "kind": "interface",
+      "members": [
+        "readonly property navigation: NavigationState",
+        "readonly property reader: ReaderState",
+        "readonly property story: Readonly<Record<string, StateValue>>"
+      ]
+    },
+    "SceneVisitMemory": {
+      "kind": "interface",
+      "members": [
+        "readonly property visitCount: number"
+      ]
+    },
+    "StoryState": {
+      "kind": "type",
+      "members": [
+        "readonly index [string]: boolean | number | string"
+      ]
+    },
+    "StoryValue": {
+      "kind": "type",
+      "members": [
+        "union false",
+        "union number",
+        "union string",
+        "union true"
+      ]
+    },
+    "VariantMemory": {
+      "kind": "interface",
+      "members": [
+        "readonly property firstSeenBranchId: string",
+        "readonly property lastSeenBranchId: string",
+        "readonly property seenCount: number"
+      ]
+    },
+    "VariantResolution": {
+      "kind": "type",
+      "members": [
+        "union { readonly ok: false; readonly error: RuntimeExecutionError; }",
+        "union { readonly ok: true; readonly resolved: ResolvedVariant | undefined; }"
+      ]
+    },
+    "advance": {
+      "kind": "function",
+      "members": [
+        "signature (StoryDocument, RuntimeState, ExecutionCursor?, AdvanceOptions?) => ExecutionStep"
+      ]
+    },
+    "createRuntimeState": {
+      "kind": "function",
+      "members": [
+        "signature (StoryDocument) => RuntimeState"
+      ]
+    },
+    "getLastSeenVariantBranch": {
+      "kind": "function",
+      "members": [
+        "signature (ReaderState, string) => string"
+      ]
+    },
+    "getSceneVisitCount": {
+      "kind": "function",
+      "members": [
+        "signature (ReaderState, string) => number"
+      ]
+    },
+    "hasSeenVariant": {
+      "kind": "function",
+      "members": [
+        "signature (ReaderState, string) => boolean"
+      ]
+    },
+    "hasVariantChangedSinceRead": {
+      "kind": "function",
+      "members": [
+        "signature (ReaderState, string, string) => boolean"
+      ]
+    },
+    "hasVisitedScene": {
+      "kind": "function",
+      "members": [
+        "signature (ReaderState, string) => boolean"
+      ]
+    },
+    "recordSceneVisit": {
+      "kind": "function",
+      "members": [
+        "signature (ReaderState, string) => ReaderState"
+      ]
+    },
+    "recordVariantSeen": {
+      "kind": "function",
+      "members": [
+        "signature (ReaderState, string, string) => ReaderState"
+      ]
+    },
+    "resolveVariant": {
+      "kind": "function",
+      "members": [
+        "signature (VariantNode, EvaluationContext) => { readonly ok: false; readonly error: RuntimeExecutionError; } | { readonly ok: true; readonly resolved: ResolvedVariant | undefined; }"
+      ]
+    },
+    "selectChoice": {
+      "kind": "function",
+      "members": [
+        "signature (StoryDocument, ExecutionStep, number) => ExecutionStep"
+      ]
+    }
+  },
+  "referencedTypes": {
+    "CursorFrame": {
+      "kind": "interface",
+      "members": [
+        "readonly property blocks: readonly StoryBlock[]",
+        "readonly property index: number",
+        "readonly property origin?: { readonly kind: \"scene\"; readonly visitRecorded: boolean; } | { readonly kind: \"variant\"; readonly variantId: string; readonly branchId: string; readonly seenRecorded: boolean; }"
+      ]
+    },
+    "CursorFrameOrigin": {
+      "kind": "type",
+      "members": [
+        "union { readonly kind: \"scene\"; readonly visitRecorded: boolean; }",
+        "union { readonly kind: \"variant\"; readonly variantId: string; readonly branchId: string; readonly seenRecorded: boolean; }"
+      ]
+    }
+  }
+}

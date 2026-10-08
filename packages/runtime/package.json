@@ -1,0 +1,40 @@
+{
+  "name": "@aftertext/runtime",
+  "version": "0.1.1",
+  "description": "AfterText runtime domain foundation: StoryState, ReaderState, and NavigationState derived from a compiled StoryDocument.",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/z0rimo/AfterText.git",
+    "directory": "packages/runtime"
+  },
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "publishConfig": {
+    "access": "public"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "prepack": "tsc -b --force",
+    "typecheck": "tsc -p tsconfig.typecheck.json",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@aftertext/compiler": "^0.1.1"
+  },
+  "devDependencies": {
+    "@types/node": "^22.7.5",
+    "typescript": "^5.6.3",
+    "vitest": "^2.1.2"
+  }
+}

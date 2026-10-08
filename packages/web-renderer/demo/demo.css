@@ -1,0 +1,75 @@
+/*
+ * Demo-only styling (docs/CORE_SPEC.md Section 19.17/19.23). Not part
+ * of @aftertext/web-renderer's published output or public styling/theming
+ * contract — the library itself ships with no CSS.
+ */
+
+:root {
+  color-scheme: light dark;
+}
+
+body {
+  margin: 0;
+  font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+  background: #f6f3ee;
+  color: #1f1b16;
+}
+
+.demo-viewport {
+  max-width: 40rem;
+  margin: 0 auto;
+  padding: 3rem 1.5rem;
+  line-height: 1.6;
+  font-size: 1.05rem;
+}
+
+.demo-viewport p {
+  margin: 0 0 1.25rem;
+}
+
+.demo-viewport h1,
+.demo-viewport h2,
+.demo-viewport h3 {
+  line-height: 1.25;
+}
+
+.demo-viewport [role="group"] {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  margin-top: 1.5rem;
+}
+
+.demo-viewport button {
+  font: inherit;
+  padding: 0.65rem 1.25rem;
+  border: 1px solid #8a7a63;
+  border-radius: 0.4rem;
+  background: #fffaf2;
+  color: inherit;
+  cursor: pointer;
+}
+
+.demo-viewport button:hover {
+  background: #f0e6d6;
+}
+
+.demo-viewport button:focus-visible {
+  outline: 2px solid #4a6fa5;
+  outline-offset: 2px;
+}
+
+.demo-viewport [role="alert"] {
+  border: 1px solid #b3403a;
+  border-radius: 0.4rem;
+  padding: 1rem;
+  background: #fdecea;
+}
+
+.demo-compile-errors {
+  max-width: 60rem;
+  margin: 2rem auto;
+  padding: 1rem;
+  white-space: pre-wrap;
+  color: #b3403a;
+}

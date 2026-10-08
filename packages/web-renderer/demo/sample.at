@@ -1,0 +1,59 @@
+---
+title: The Locked Door
+state:
+  has_key: false
+---
+
+@scene start
+
+You wake up in a small stone room. Sunlight cuts through a *narrow* window, and there is a **heavy** wooden door across from you. Something small glints on the windowsill — you can just make out the shape with a bit of `focus`.
+
+## The Door
+
+@background stone-room.svg
+
+A [worn brass key](https://en.wikipedia.org/wiki/Key_(lock)) sits within reach.
+
+@layer brass-key.svg
+
+@camera zoom to=1.3 duration=800ms
+
+A closer look confirms it.
+
+@camera zoom to=1
+
+@sfx key-pickup.wav
+
+@set has_key = true
+
+@choice
+- Take the key and try the door -> hallway-key
+- Ignore it and try the door anyway -> hallway-plain
+@end
+
+@scene hallway-key
+
+@background hallway.svg
+@music hallway-theme.mp3
+
+The key turns smoothly. The door swings open onto a long stone hallway.
+
+Ahead, daylight spills in from an open archway.
+
+@goto ending
+
+@scene hallway-plain
+
+@music hallway-theme.mp3
+
+You throw your shoulder against the door. It doesn't budge — but a moment later, it creaks open anyway. Someone left it unlocked. The stone room is still at your back.
+
+Ahead, daylight spills in from an open archway.
+
+@goto ending
+
+@scene ending
+
+@pause 1s
+
+You step out into the light. The story ends here, for now.

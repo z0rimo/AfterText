@@ -1,0 +1,128 @@
+{
+  "package": "@aftertext/player",
+  "packageExports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "exports": {
+    "AdvanceOptions": {
+      "kind": "interface",
+      "members": [
+        "readonly property stepBudget?: number"
+      ]
+    },
+    "AvailableChoiceItem": {
+      "kind": "interface",
+      "members": [
+        "readonly property index: number",
+        "readonly property target: string",
+        "readonly property text: string"
+      ]
+    },
+    "ChoiceResult": {
+      "kind": "interface",
+      "members": [
+        "readonly property items: readonly AvailableChoiceItem[]",
+        "readonly property type: \"choice\""
+      ]
+    },
+    "CompletedResult": {
+      "kind": "interface",
+      "members": [
+        "readonly property type: \"completed\""
+      ]
+    },
+    "ContentResult": {
+      "kind": "interface",
+      "members": [
+        "readonly property block: HeadingNode | ParagraphNode",
+        "readonly property type: \"content\""
+      ]
+    },
+    "ErrorResult": {
+      "kind": "interface",
+      "members": [
+        "readonly property error: RuntimeExecutionError",
+        "readonly property type: \"error\""
+      ]
+    },
+    "ExecutionResult": {
+      "kind": "type",
+      "members": [
+        "union ChoiceResult",
+        "union CompletedResult",
+        "union ContentResult",
+        "union ErrorResult",
+        "union NavigationResult",
+        "union PresentationResult"
+      ]
+    },
+    "NavigationResult": {
+      "kind": "interface",
+      "members": [
+        "readonly property from: string",
+        "readonly property to: string",
+        "readonly property type: \"navigation\""
+      ]
+    },
+    "PlayerState": {
+      "kind": "interface",
+      "members": [
+        "readonly property current: ChoiceResult | CompletedResult | ContentResult | ErrorResult | NavigationResult | PresentationResult",
+        "readonly property cursor: ExecutionCursor",
+        "readonly property runtimeState: RuntimeState"
+      ]
+    },
+    "PresentationResult": {
+      "kind": "interface",
+      "members": [
+        "readonly property command: BackgroundCommand | CameraZoomCommand | LayerCommand | MusicCommand | PauseCommand | SfxCommand",
+        "readonly property type: \"presentation\""
+      ]
+    },
+    "RuntimeExecutionError": {
+      "kind": "interface",
+      "members": [
+        "readonly property kind: \"division-by-zero\" | \"empty-choice\" | \"invalid-arithmetic-result\" | \"invalid-choice-selection\" | \"invalid-scene-target\" | \"invalid-variant-reference\" | \"step-limit-exceeded\" | \"type-mismatch\" | \"unknown-builtin\" | \"unknown-identifier\"",
+        "readonly property message: string",
+        "readonly property span?: SourceSpan"
+      ]
+    },
+    "RuntimeExecutionErrorKind": {
+      "kind": "type",
+      "members": [
+        "union \"division-by-zero\"",
+        "union \"empty-choice\"",
+        "union \"invalid-arithmetic-result\"",
+        "union \"invalid-choice-selection\"",
+        "union \"invalid-scene-target\"",
+        "union \"invalid-variant-reference\"",
+        "union \"step-limit-exceeded\"",
+        "union \"type-mismatch\"",
+        "union \"unknown-builtin\"",
+        "union \"unknown-identifier\""
+      ]
+    },
+    "advancePlayer": {
+      "kind": "function",
+      "members": [
+        "signature (StoryDocument, PlayerState, AdvanceOptions?) => PlayerState"
+      ]
+    },
+    "createPlayer": {
+      "kind": "function",
+      "members": [
+        "signature (StoryDocument) => PlayerState"
+      ]
+    },
+    "selectPlayerChoice": {
+      "kind": "function",
+      "members": [
+        "signature (StoryDocument, PlayerState, number) => PlayerState"
+      ]
+    }
+  },
+  "referencedTypes": {}
+}

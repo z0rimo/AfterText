@@ -1,0 +1,14 @@
+{
+  // Solution-style config: not a real project, just the entry point for
+  // `tsc -b`, which walks these `references` to build every workspace
+  // package in dependency order (deterministically, via the graph — not
+  // by relying on `packages/*` alphabetical listing) and skips any
+  // package whose inputs haven't changed since its last build.
+  "files": [],
+  "references": [
+    { "path": "packages/compiler" },
+    { "path": "packages/runtime" },
+    { "path": "packages/player" },
+    { "path": "packages/web-renderer" }
+  ]
+}
