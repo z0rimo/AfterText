@@ -44,6 +44,14 @@ export const Diagnostics = {
       span
     );
   },
+  blocksNestedTooDeeply(limit: number, span: SourceSpan): Diagnostic {
+    return diagnostic(
+      "error",
+      "AT1007",
+      `Conditional and variant blocks are nested too deeply (limit ${limit}); the block is skipped.`,
+      span
+    );
+  },
   duplicateVariantId(id: string, span: SourceSpan): Diagnostic {
     return diagnostic("error", "AT1101", `Duplicate variant id "${id}".`, span);
   },

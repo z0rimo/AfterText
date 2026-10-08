@@ -1,6 +1,5 @@
 import { unified } from "unified";
 import remarkParse from "remark-parse";
-import { toString as mdastToString } from "mdast-util-to-string";
 import type {
   Content as MdastContent,
   Heading as MdastHeading,
@@ -14,6 +13,7 @@ import type { HeadingNode, ParagraphNode, StoryBlock } from "../ast/story.js";
 import type { InlineNode } from "../ast/inline.js";
 import { Diagnostics } from "../diagnostics/codes.js";
 import type { Diagnostic } from "../diagnostics/types.js";
+import { MAX_INLINE_DEPTH } from "../limits.js";
 import { SEPARATOR_WHITESPACE_PATTERN } from "./lexical-primitives.js";
 
 /**
@@ -57,35 +57,65 @@ function remapSpan(position: MdastPosition | undefined, anchor: ChunkAnchor): So
   };
 }
 
+/**
+ * Concatenated text of `root` and its descendants (`value`, else `alt`),
+ * in document order. Iterative, so arbitrarily deep trees cannot overflow
+ * the call stack the way a recursive walk would.
+ */
+function flattenText(root: unknown): string {
+  let text = "";
+  const stack: unknown[] = [root];
+  while (stack.length > 0) {
+    const node = stack.pop() as { value?: unknown; alt?: unknown; children?: unknown };
+    if (typeof node.value === "string") text += node.value;
+    else if (typeof node.alt === "string") text += node.alt;
+    else if (Array.isArray(node.children)) {
+      for (let i = node.children.length - 1; i >= 0; i--) stack.push(node.children[i]);
+    }
+  }
+  return text;
+}
+
 function convertInlineChildren(
   children: readonly MdastContent[],
   anchor: ChunkAnchor,
-  diagnostics: Diagnostic[]
+  diagnostics: Diagnostic[],
+  depth: number
 ): InlineNode[] {
   const result: InlineNode[] = [];
   for (const child of children) {
-    const node = convertInline(child, anchor, diagnostics);
+    const node = convertInline(child, anchor, diagnostics, depth);
     if (node) result.push(node);
   }
   return result;
 }
 
-function convertInline(node: MdastContent, anchor: ChunkAnchor, diagnostics: Diagnostic[]): InlineNode | undefined {
+function convertInline(
+  node: MdastContent,
+  anchor: ChunkAnchor,
+  diagnostics: Diagnostic[],
+  depth: number
+): InlineNode | undefined {
   const span = remapSpan(node.position, anchor);
+  if (depth >= MAX_INLINE_DEPTH && "children" in node) {
+    diagnostics.push(Diagnostics.unsupportedMarkdown(`nesting deeper than ${MAX_INLINE_DEPTH} levels`, span));
+    const flat = flattenText(node);
+    return flat.length > 0 ? { type: "Text", value: flat, span } : undefined;
+  }
   switch (node.type) {
     case "text":
       return { type: "Text", value: node.value, span };
     case "emphasis":
-      return { type: "Emphasis", children: convertInlineChildren(node.children, anchor, diagnostics), span };
+      return { type: "Emphasis", children: convertInlineChildren(node.children, anchor, diagnostics, depth + 1), span };
     case "strong":
-      return { type: "Strong", children: convertInlineChildren(node.children, anchor, diagnostics), span };
+      return { type: "Strong", children: convertInlineChildren(node.children, anchor, diagnostics, depth + 1), span };
     case "inlineCode":
       return { type: "InlineCode", value: node.value, span };
     case "link":
       return {
         type: "Link",
         url: node.url,
-        children: convertInlineChildren(node.children, anchor, diagnostics),
+        children: convertInlineChildren(node.children, anchor, diagnostics, depth + 1),
         span
       };
     case "break":
@@ -96,7 +126,7 @@ function convertInline(node: MdastContent, anchor: ChunkAnchor, diagnostics: Dia
       // than reimplementing the rest of Markdown's inline grammar, but
       // warn so this doesn't silently change document meaning.
       diagnostics.push(Diagnostics.unsupportedMarkdown(node.type, span));
-      const text = mdastToString(node);
+      const text = flattenText(node);
       return text.length > 0 ? { type: "Text", value: text, span } : undefined;
     }
   }
@@ -213,14 +243,14 @@ function convertBlock(node: MdastContent, anchor: ChunkAnchor, diagnostics: Diag
     const paragraph = node as MdastParagraph;
     const result: ParagraphNode = {
       type: "Paragraph",
-      children: convertInlineChildren(paragraph.children, anchor, diagnostics),
+      children: convertInlineChildren(paragraph.children, anchor, diagnostics, 0),
       span
     };
     return result;
   }
   if (node.type === "heading") {
     const heading = node as MdastHeading;
-    const children = convertInlineChildren(heading.children, anchor, diagnostics);
+    const children = convertInlineChildren(heading.children, anchor, diagnostics, 0);
     const contentSourceSpan =
       children.length > 0
         ? computeNonemptyHeadingContentSpan(children)
@@ -242,7 +272,7 @@ function convertBlock(node: MdastContent, anchor: ChunkAnchor, diagnostics: Diag
   // of their flattened text so no source content is silently dropped, but
   // warn so this doesn't silently change document meaning.
   diagnostics.push(Diagnostics.unsupportedMarkdown(node.type, span));
-  const text = mdastToString(node);
+  const text = flattenText(node);
   const fallback: ParagraphNode = {
     type: "Paragraph",
     children: text.length > 0 ? [{ type: "Text", value: text, span }] : [],

@@ -24,6 +24,7 @@ import {
   type SimplePresentationDirective
 } from "./directive-line.js";
 import { joinLineText, lineEnd, lineStart, positionAt, type SourceLine } from "./lines.js";
+import { MAX_BLOCK_DEPTH } from "../limits.js";
 import { parseProseChunk } from "./markdown.js";
 import { ExpressionSyntaxError, parseExpression } from "./expression-parser.js";
 import { RESERVED_VARIABLE_NAMES } from "./expression-lexer.js";
@@ -769,7 +770,8 @@ function parseChoice(
 function parseConditional(
   lines: readonly SourceLine[],
   openIndex: number,
-  diagnostics: Diagnostic[]
+  diagnostics: Diagnostic[],
+  depth: number
 ): { block: ConditionalNode; nextIndex: number } {
   const openLine = lines[openIndex] as SourceLine;
   const branches: ConditionalBranch[] = [];
@@ -793,7 +795,7 @@ function parseConditional(
         : undefined;
 
     idx += 1;
-    const seq = parseBlockSequence(lines, idx, diagnostics, new Set(["elseif", "else", "end"]));
+    const seq = parseBlockSequence(lines, idx, diagnostics, new Set(["elseif", "else", "end"]), depth + 1);
     const branchSpan = {
       start: lineStart(branchLine),
       end: seq.blocks.length > 0 ? (seq.blocks[seq.blocks.length - 1] as StoryBlock).span.end : lineEnd(branchLine)
@@ -835,7 +837,8 @@ function parseConditional(
 function parseVariant(
   lines: readonly SourceLine[],
   openIndex: number,
-  diagnostics: Diagnostic[]
+  diagnostics: Diagnostic[],
+  depth: number
 ): { block: VariantNode; nextIndex: number } {
   const openLine = lines[openIndex] as SourceLine;
   const openDirective = matchDirectiveLine(openLine.text) as ParsedDirectiveLine;
@@ -859,7 +862,7 @@ function parseVariant(
   let lastEnd = lineEnd(openLine);
 
   let idx = openIndex + 1;
-  let seq = parseBlockSequence(lines, idx, diagnostics, new Set(["when", "otherwise", "end"]));
+  let seq = parseBlockSequence(lines, idx, diagnostics, new Set(["when", "otherwise", "end"]), depth + 1);
   idx = seq.nextIndex;
 
   while (seq.stoppedBy === "when" || seq.stoppedBy === "otherwise") {
@@ -888,7 +891,7 @@ function parseVariant(
         : undefined;
 
     idx += 1;
-    const bodySeq = parseBlockSequence(lines, idx, diagnostics, new Set(["when", "otherwise", "end"]));
+    const bodySeq = parseBlockSequence(lines, idx, diagnostics, new Set(["when", "otherwise", "end"]), depth + 1);
     const branchSpan = {
       start: lineStart(branchLine),
       end:
@@ -929,6 +932,42 @@ function parseVariant(
 }
 
 /**
+ * Returns the index just past the `@end` that closes the construct opened at
+ * `openIndex`, counting nested `@if` / `@variant` / `@choice` openers (a `@choice` body is opaque
+ * up to its first `@end`, matching `parseChoice`). Stops
+ * early at a `@scene` line (scenes bound every construct) or end of input.
+ * Iterative on purpose: it is used on input too deep to recurse over.
+ */
+function skipConstruct(lines: readonly SourceLine[], openIndex: number): number {
+  let level = 0;
+  // parseChoice treats its body as opaque up to the first `@end` (or `@scene`):
+  // directive-shaped lines inside it are ignored, so they must not open anything here.
+  let inChoice = false;
+  for (let j = openIndex; j < lines.length; j++) {
+    const directive = matchDirectiveLine((lines[j] as SourceLine).text);
+    if (!directive) continue;
+    if (directive.name === "scene" && j > openIndex) return j;
+    if (inChoice) {
+      if (directive.name === "end") {
+        inChoice = false;
+        level -= 1;
+        if (level === 0) return j + 1;
+      }
+      continue;
+    }
+    if (directive.name === "if" || directive.name === "variant") level += 1;
+    else if (directive.name === "choice") {
+      level += 1;
+      inChoice = true;
+    } else if (directive.name === "end") {
+      level -= 1;
+      if (level === 0) return j + 1;
+    }
+  }
+  return lines.length;
+}
+
+/**
  * Parses a run of lines into StoryBlocks until either a directive in
  * `terminators` is reached, a `@scene` line is reached (scenes always
  * bound any enclosing construct), or the input is exhausted.
@@ -941,7 +980,8 @@ export function parseBlockSequence(
   lines: readonly SourceLine[],
   start: number,
   diagnostics: Diagnostic[],
-  terminators: ReadonlySet<string>
+  terminators: ReadonlySet<string>,
+  depth = 0
 ): BlockSequenceResult {
   const blocks: StoryBlock[] = [];
   let i = start;
@@ -1019,13 +1059,23 @@ export function parseBlockSequence(
         break;
       }
       case "if": {
-        const { block, nextIndex } = parseConditional(lines, i, diagnostics);
+        if (depth >= MAX_BLOCK_DEPTH) {
+          diagnostics.push(Diagnostics.blocksNestedTooDeeply(MAX_BLOCK_DEPTH, spanOf(line)));
+          i = skipConstruct(lines, i);
+          break;
+        }
+        const { block, nextIndex } = parseConditional(lines, i, diagnostics, depth);
         blocks.push(block);
         i = nextIndex;
         break;
       }
       case "variant": {
-        const { block, nextIndex } = parseVariant(lines, i, diagnostics);
+        if (depth >= MAX_BLOCK_DEPTH) {
+          diagnostics.push(Diagnostics.blocksNestedTooDeeply(MAX_BLOCK_DEPTH, spanOf(line)));
+          i = skipConstruct(lines, i);
+          break;
+        }
+        const { block, nextIndex } = parseVariant(lines, i, diagnostics, depth);
         blocks.push(block);
         i = nextIndex;
         break;
