@@ -3,7 +3,12 @@
 // package name. Anything else is rejected rather than guessed at.
 export function parsePackInfo(out, name) {
   const json = JSON.parse(out);
-  const info = Array.isArray(json) ? (json.length === 1 ? json[0] : undefined) : json?.[name];
+  let info;
+  if (Array.isArray(json)) {
+    if (json.length === 1) info = json[0];
+  } else {
+    info = json?.[name];
+  }
   if (!info || !Array.isArray(info.files) || typeof info.filename !== "string") {
     throw new Error(`${name}: unexpected \`npm pack --json\` output: ${out.slice(0, 200)}`);
   }
