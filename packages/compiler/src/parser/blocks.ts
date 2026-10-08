@@ -933,18 +933,33 @@ function parseVariant(
 
 /**
  * Returns the index just past the `@end` that closes the construct opened at
- * `openIndex`, counting nested `@if` / `@variant` / `@choice` openers. Stops
+ * `openIndex`, counting nested `@if` / `@variant` / `@choice` openers (a `@choice` body is opaque
+ * up to its first `@end`, matching `parseChoice`). Stops
  * early at a `@scene` line (scenes bound every construct) or end of input.
  * Iterative on purpose: it is used on input too deep to recurse over.
  */
 function skipConstruct(lines: readonly SourceLine[], openIndex: number): number {
   let level = 0;
+  // parseChoice treats its body as opaque up to the first `@end` (or `@scene`):
+  // directive-shaped lines inside it are ignored, so they must not open anything here.
+  let inChoice = false;
   for (let j = openIndex; j < lines.length; j++) {
     const directive = matchDirectiveLine((lines[j] as SourceLine).text);
     if (!directive) continue;
     if (directive.name === "scene" && j > openIndex) return j;
-    if (directive.name === "if" || directive.name === "variant" || directive.name === "choice") level += 1;
-    else if (directive.name === "end") {
+    if (inChoice) {
+      if (directive.name === "end") {
+        inChoice = false;
+        level -= 1;
+        if (level === 0) return j + 1;
+      }
+      continue;
+    }
+    if (directive.name === "if" || directive.name === "variant") level += 1;
+    else if (directive.name === "choice") {
+      level += 1;
+      inChoice = true;
+    } else if (directive.name === "end") {
       level -= 1;
       if (level === 0) return j + 1;
     }

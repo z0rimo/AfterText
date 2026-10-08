@@ -95,6 +95,20 @@ describe("block nesting", () => {
     expect(result.document.scenes.map((s) => s.id)).toEqual(["s", "t"]);
   });
 
+  it("a @choice body is opaque while skipping: directive-shaped lines inside it open nothing", () => {
+    const source =
+      "@scene s\n" +
+      "@if a\n".repeat(BLOCK_LIMIT + 1) +
+      "@choice\n@if stray\n- Go -> t\n@end\n" +
+      "@end\n".repeat(BLOCK_LIMIT + 1) +
+      "after\n@scene t\nhi\n";
+    const result = compileOrThrow(source);
+    expect(result.diagnostics.filter((d) => d.code === "AT1007")).toHaveLength(1);
+    expect(result.diagnostics.filter((d) => d.code === "AT1002")).toEqual([]);
+    const outer = result.document.scenes[0]!.blocks;
+    expect(outer.map((b) => b.type)).toEqual(["Conditional", "Paragraph"]);
+  });
+
   it("an unclosed over-deep construct stops at the next @scene", () => {
     const source = "@scene s\n" + "@if a\n".repeat(BLOCK_LIMIT + 1) + "x\n@scene t\nhi\n";
     const result = compileOrThrow(source);
