@@ -128,7 +128,7 @@
     "Diagnostic": {
       "kind": "interface",
       "members": [
-        "readonly property code: \"AT1001\" | \"AT1002\" | \"AT1003\" | \"AT1004\" | \"AT1005\" | \"AT1006\" | \"AT1101\" | \"AT1102\" | \"AT1103\" | \"AT1104\" | \"AT1201\" | \"AT1202\" | \"AT1301\" | \"AT1302\" | \"AT2001\" | \"AT2002\" | \"AT2003\" | \"AT2004\" | \"AT2005\" | \"AT3001\"",
+        "readonly property code: \"AT1001\" | \"AT1002\" | \"AT1003\" | \"AT1004\" | \"AT1005\" | \"AT1006\" | \"AT1007\" | \"AT1101\" | \"AT1102\" | \"AT1103\" | \"AT1104\" | \"AT1201\" | \"AT1202\" | \"AT1301\" | \"AT1302\" | \"AT2001\" | \"AT2002\" | \"AT2003\" | \"AT2004\" | \"AT2005\" | \"AT3001\"",
         "readonly property message: string",
         "readonly property severity: \"error\" | \"warning\"",
         "readonly property span: SourceSpan"
@@ -143,6 +143,7 @@
         "union \"AT1004\"",
         "union \"AT1005\"",
         "union \"AT1006\"",
+        "union \"AT1007\"",
         "union \"AT1101\"",
         "union \"AT1102\"",
         "union \"AT1103\"",
