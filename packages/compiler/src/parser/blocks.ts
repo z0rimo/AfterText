@@ -580,7 +580,10 @@ function parsePresentation(
   }
 }
 
-const SET_PATTERN = /^([A-Za-z_][A-Za-z0-9_]*)\s*=\s*(.+)$/;
+// `\S.*` (not `.+`) after the separator keeps `\s*` and the expression from
+// overlapping, so the pattern cannot backtrack across whitespace. `args` are
+// trimmed and never contain a line terminator, so it accepts the same lines.
+const SET_PATTERN = /^([A-Za-z_]\w*)\s*=\s*(\S.*)$/;
 
 function parseSet(
   directive: ParsedDirectiveLine,
@@ -698,7 +701,7 @@ function parseChoice(
     // Display text is only the "if" delimiter's own condition-grammar is
     // applied to the tail *after* the target — so an "if" appearing in
     // display text (before the arrow) can never be mistaken for one.
-    const displayText = content.slice(0, arrowIndex).trim().replace(/\\->/g, "->");
+    const displayText = content.slice(0, arrowIndex).trim().replaceAll(String.raw`\->`, "->");
 
     const tailStart = arrowIndex + 2;
     const tailRaw = content.slice(tailStart);
