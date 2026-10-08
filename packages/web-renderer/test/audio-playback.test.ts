@@ -115,6 +115,13 @@ describe("applyMusicIntent", () => {
     expect(() => applyMusicIntent(element, music("theme.mp3"), resolveAsset)).not.toThrow();
   });
 
+  it("a play() that returns no Promise (older engines, test doubles) is tolerated", () => {
+    playSpy.mockReturnValue(undefined as never);
+    const resolveAsset: ResolveAudioAsset = (ref) => `/resolved/${ref}`;
+    expect(() => applyMusicIntent(element, music("theme.mp3"), resolveAsset)).not.toThrow();
+    expect(playSpy).toHaveBeenCalledTimes(1);
+  });
+
   it("a rejected play() Promise never produces an unhandled rejection", async () => {
     playSpy.mockRejectedValue(new Error("NotAllowedError"));
     const resolveAsset: ResolveAudioAsset = (ref) => `/resolved/${ref}`;

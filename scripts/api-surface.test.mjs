@@ -290,6 +290,20 @@ test("diffSurfaces flags a type-only export becoming a value, and the reverse", 
   assert.deepEqual(diffSurfaces(value, typeOnly).changed.map((c) => c.name), ["Thing"]);
 });
 
+test("name lists are in UTF-16 code-unit order, independent of the machine locale", async () => {
+  // `localeCompare` would order "advance" before "INITIAL_CURSOR" and differs between locales;
+  // the baseline must be identical on every machine.
+  const { runtimeKeys } = await extractSurface("runtime");
+  assert.deepEqual(runtimeKeys, [...runtimeKeys].sort((a, b) => (a < b ? -1 : a > b ? 1 : 0)));
+  assert.ok(runtimeKeys.indexOf("INITIAL_CURSOR") < runtimeKeys.indexOf("advance"));
+
+  const surface = {
+    exports: { b: { kind: "const", members: [] }, B: { kind: "const", members: [] }, a: { kind: "function", members: [] } },
+    runtimeKeys: []
+  };
+  assert.deepEqual(findDeclarationRuntimeMismatches(surface).missingAtRuntime, ["B", "a", "b"]);
+});
+
 test("diffSurfaces reports nothing for identical surfaces", () => {
   const surface = {
     package: "x",

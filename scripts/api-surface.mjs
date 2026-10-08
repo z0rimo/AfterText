@@ -324,7 +324,7 @@ export async function extractSurface(name, root = repoRoot) {
   // Describing exports can discover more non-exported types; the map is filled during traversal.
   const referencedTypes = Object.fromEntries([...describer.referenced.entries()].sort(([a], [b]) => byText(a, b)));
 
-  const runtimeKeys = Object.keys(await import(pathToFileURL(scriptFile).href)).sort();
+  const runtimeKeys = Object.keys(await import(pathToFileURL(scriptFile).href)).sort(byText);
 
   return { package: manifest.name, packageExports: manifest.exports ?? null, exports, referencedTypes, runtimeKeys };
 }
@@ -385,7 +385,7 @@ export function findDeclarationRuntimeMismatches(surface) {
   const declaredValues = Object.entries(surface.exports)
     .filter(([, entry]) => entry.kind.split("+").some((kind) => VALUE_KINDS.has(kind)))
     .map(([exportName]) => exportName)
-    .sort();
+    .sort(byText);
   const missingAtRuntime = declaredValues.filter((exportName) => !surface.runtimeKeys.includes(exportName));
   const undeclaredAtRuntime = surface.runtimeKeys.filter((exportName) => !declaredValues.includes(exportName));
   return { missingAtRuntime, undeclaredAtRuntime };
