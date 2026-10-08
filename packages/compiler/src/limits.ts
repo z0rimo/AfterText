@@ -4,7 +4,11 @@
  * ordinary source error reported as a diagnostic, never an exception.
  */
 
-/** Maximum height of an expression tree (also bounds parenthesis and unary nesting). */
+/**
+ * Maximum height of an expression tree and of parser recursion. Each nested
+ * parenthesis consumes two levels of the recursion budget, so about half this
+ * many parentheses fit; binary chains, unary chains and calls reach the limit.
+ */
 export const MAX_EXPRESSION_DEPTH = 256;
 
 /** Maximum nesting of `@if` / `@variant` constructs inside one another. */

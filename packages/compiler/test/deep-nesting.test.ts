@@ -113,7 +113,9 @@ describe("Markdown nesting", () => {
   it("deeply nested lists fall back to plain text with a warning and do not throw", () => {
     const result = compileOrThrow("@scene s\n" + "- ".repeat(2_500) + "x\n");
     expect(result.diagnostics.map((d) => d.code)).toContain("AT3001");
-  });
+    // remark itself parses nested lists in superlinear time (about 3 s here);
+    // the explicit timeout keeps slow CI runners from failing the default 5 s.
+  }, 30_000);
 
   it("deeply nested emphasis is flattened beyond the limit instead of overflowing", () => {
     const depth = 300;
