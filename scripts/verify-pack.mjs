@@ -7,6 +7,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { parsePackInfo } from "./pack-json.mjs";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const PACKAGES = ["compiler", "runtime", "player", "web-renderer"];
@@ -26,7 +27,7 @@ try {
   for (const p of PACKAGES) {
     const dir = path.join(root, "packages", p);
     const out = exec("npm", ["pack", "--json", "--pack-destination", packDir], { cwd: dir }).toString();
-    const info = JSON.parse(out)[0];
+    const info = parsePackInfo(out, `@aftertext/${p}`);
     const files = info.files.map((f) => f.path);
     for (const required of ["package.json", "LICENSE", "README.md", "dist/index.js", "dist/index.d.ts"]) {
       if (!files.includes(required)) throw new Error(`${p}: tarball is missing ${required}`);
