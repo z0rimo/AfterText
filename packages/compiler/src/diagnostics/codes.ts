@@ -55,6 +55,24 @@ export const Diagnostics = {
   emptySceneId(span: SourceSpan): Diagnostic {
     return diagnostic("error", "AT1008", `Scene declaration requires a non-empty id.`, span);
   },
+  misplacedDirective(name: string, where: string, span: SourceSpan): Diagnostic {
+    return diagnostic(
+      "error",
+      "AT1009",
+      where === "here" && name === "end"
+        ? `"@end" has no open block to close; the line is ignored.`
+        : `"@${name}" is not valid ${where}; the line is ignored.`,
+      span
+    );
+  },
+  variantContentBeforeBranch(span: SourceSpan): Diagnostic {
+    return diagnostic(
+      "error",
+      "AT1105",
+      `Content before the first "@when" or "@otherwise" belongs to no branch and is ignored.`,
+      span
+    );
+  },
   duplicateVariantId(id: string, span: SourceSpan): Diagnostic {
     return diagnostic("error", "AT1101", `Duplicate variant id "${id}".`, span);
   },
