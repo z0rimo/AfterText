@@ -103,7 +103,7 @@ export const Diagnostics = {
     return diagnostic(
       "error",
       "AT1201",
-      `Unsupported initial state value for "${key}": only string, number, boolean, and null are allowed.`,
+      `Unsupported initial state value for "${key}": only string, finite number, boolean, and null are allowed.`,
       span
     );
   },

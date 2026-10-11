@@ -326,6 +326,8 @@ Status: LOCKED
 
 A scene continues until the next scene declaration or EOF.
 
+A single UTF-8 byte-order mark (`U+FEFF`) at the very start of the source is an encoding signature, not authored text: the document compiles exactly as it would without it. Source offsets still index the original string (the BOM occupies offset 0, so every offset is one greater than in the BOM-less text), and column 1 is the first character after it. No other leading character is skipped.
+
 A document without an explicit scene receives a deterministic synthetic `main` scene.
 
 Leading prose before an explicit scene is also preserved through the synthetic-main mechanism.
@@ -537,6 +539,11 @@ Malformed YAML syntax must not produce misleading cascading semantic state diagn
 Semantic state validation remains active whenever the YAML syntax itself is valid.
 
 Initial story state must not remain embedded inside generic metadata.
+
+**Frontmatter value rules (additive).**
+
+* A `state:` number must be finite. YAML `.inf`, `-.inf`, `.nan` and out-of-range literals such as `1e999` are not JSON-representable; they are reported as `AT1201` on the value and the entry is excluded (Section 24.2).
+* `title` and `entry` must be strings. An absent key, or a null value (`title:` / `entry: null`), means "not set" and produces no diagnostic. Any other type (a number, a boolean, a list or a map) produces `AT1202` on the value and is not used, so `entry: 123` never silently falls back to the first scene; quote the value to write it as text. As with `state:`, this check is skipped when the YAML itself has a syntax error.
 
 **State key rules (LOCKED, additive for v0.1.1).** Every key of the `state:` map must be a valid state variable name, so each declared variable can be referenced by the expression language and assigned by `@set`:
 
@@ -852,8 +859,8 @@ The `DiagnosticCode` type currently contains exactly the codes below. Existing c
 | `AT1102` | error | Variant has no `@when` branch. | Validation |
 | `AT1103` | error | Reference to an unknown variant (for example a Reader Memory query argument). | Validation |
 | `AT1104` | error | A variant branch appears after `@otherwise`; `@otherwise` must be last. | Validation |
-| `AT1201` | error | Unsupported initial-state entry: either a value that is not a string, number, boolean, or null (arrays, nested maps, aliases, a non-map `state`), or an unsupported key (Section 12). The entry is excluded from the initial state. | Parser |
-| `AT1202` | error | Invalid frontmatter: a YAML syntax error, including duplicate keys. | Parser |
+| `AT1201` | error | Unsupported initial-state entry: either a value that is not a string, finite number, boolean, or null (arrays, nested maps, aliases, a non-map `state`, `.inf`, `.nan`), or an unsupported key (Section 12). The entry is excluded from the initial state. | Parser |
+| `AT1202` | error | Invalid frontmatter: a YAML syntax error (including duplicate keys), or a `title` / `entry` whose value is not a string (Section 12). | Parser |
 | `AT1301` | error | Malformed presentation directive. | Parser |
 | `AT1302` | error | Presentation numeric value is not representable as a finite number. | Parser |
 | `AT2001` | error | Malformed expression. | Parser |

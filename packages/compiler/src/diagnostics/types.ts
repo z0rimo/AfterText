@@ -24,7 +24,7 @@ export type DiagnosticCode =
   | "AT1103" // unknown Variant reference (e.g. a Reader Memory query argument)
   | "AT1104" // variant branch appears after "@otherwise" (must be last)
   | "AT1201" // unsupported initial state entry (value or key)
-  | "AT1202" // invalid frontmatter (YAML syntax error)
+  | "AT1202" // invalid frontmatter (YAML syntax error, or title/entry not a string)
   | "AT1301" // malformed presentation directive
   | "AT1302" // presentation numeric value is not representable as a finite number
   | "AT2001" // malformed expression
