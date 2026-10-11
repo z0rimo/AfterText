@@ -1189,6 +1189,12 @@ export function parseScenes(lines: readonly SourceLine[], diagnostics: Diagnosti
     const sceneLine = lines[i] as SourceLine;
     const directive = matchDirectiveLine(sceneLine.text) as ParsedDirectiveLine;
     const sceneId = directive.args.trim();
+    if (sceneId === "") {
+      // Zero-width insertion point right after the `@scene` keyword
+      // (`@` + name), where an id could be written.
+      const insertion = positionAt(sceneLine, directive.name.length + 1);
+      diagnostics.push(Diagnostics.emptySceneId({ start: insertion, end: insertion }));
+    }
 
     i += 1;
     const seq = parseBlockSequence(lines, i, diagnostics, new Set());

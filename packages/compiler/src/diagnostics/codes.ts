@@ -52,6 +52,9 @@ export const Diagnostics = {
       span
     );
   },
+  emptySceneId(span: SourceSpan): Diagnostic {
+    return diagnostic("error", "AT1008", `Scene declaration requires a non-empty id.`, span);
+  },
   duplicateVariantId(id: string, span: SourceSpan): Diagnostic {
     return diagnostic("error", "AT1101", `Duplicate variant id "${id}".`, span);
   },
