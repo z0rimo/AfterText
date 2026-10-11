@@ -332,7 +332,7 @@ A document without an explicit scene receives a deterministic synthetic `main` s
 
 Leading prose before an explicit scene is also preserved through the synthetic-main mechanism.
 
-Empty-string scene IDs are forbidden.
+Empty-string scene IDs are forbidden. A `@scene` directive with no id raises `AT1008`; the best-effort Scene node is still produced with `id` `""` (no id is invented).
 
 ---
 
@@ -855,6 +855,7 @@ The `DiagnosticCode` type currently contains exactly the codes below. Existing c
 | `AT1005` | error | Malformed choice item: bullet line with no `->` target, or an invalid target tail. | Parser |
 | `AT1006` | error | A conditional branch appears after `@else`; `@else` must be last. | Validation |
 | `AT1007` | error | `@if` / `@variant` constructs are nested more than 64 levels deep; the over-deep construct is skipped. | Parser |
+| `AT1008` | error | Scene declaration has an empty id (`@scene` with no id). The diagnostic span is zero-width, immediately after `@scene`; the best-effort scene keeps `id` `""`. | Parser |
 | `AT1101` | error | Duplicate variant id. | Validation |
 | `AT1102` | error | Variant has no `@when` branch. | Validation |
 | `AT1103` | error | Reference to an unknown variant (for example a Reader Memory query argument). | Validation |
