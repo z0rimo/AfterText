@@ -859,7 +859,7 @@ The `DiagnosticCode` type currently contains exactly the codes below. Existing c
 | `AT1102` | error | Variant has no `@when` branch. | Validation |
 | `AT1103` | error | Reference to an unknown variant (for example a Reader Memory query argument). | Validation |
 | `AT1104` | error | A variant branch appears after `@otherwise`; `@otherwise` must be last. | Validation |
-| `AT1201` | error | Unsupported initial-state entry: either a value that is not a string, number, boolean, or null (arrays, nested maps, aliases, a non-map `state`), or an unsupported key (Section 12). The entry is excluded from the initial state. | Parser |
+| `AT1201` | error | Unsupported initial-state entry: either a value that is not a string, finite number, boolean, or null (arrays, nested maps, aliases, a non-map `state`, `.inf`, `.nan`), or an unsupported key (Section 12). The entry is excluded from the initial state. | Parser |
 | `AT1202` | error | Invalid frontmatter: a YAML syntax error (including duplicate keys), or a `title` / `entry` whose value is not a string (Section 12). | Parser |
 | `AT1301` | error | Malformed presentation directive. | Parser |
 | `AT1302` | error | Presentation numeric value is not representable as a finite number. | Parser |

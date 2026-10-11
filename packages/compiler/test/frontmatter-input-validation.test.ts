@@ -63,6 +63,7 @@ describe("frontmatter state: non-finite numbers", () => {
 
     expect(result.diagnostics.map((d) => d.code)).toEqual(["AT1201"]);
     expect(result.diagnostics[0]!.span.start).toMatchObject({ line: 3, column: 8 });
+    expect(result.diagnostics[0]!.message).toContain("finite number");
     expect(result.document.initialState).toEqual({ good: 2 });
     expect(JSON.parse(JSON.stringify(result.document.initialState))).toEqual({ good: 2 });
   });
