@@ -1,4 +1,5 @@
 import type { ReaderState } from "../state/reader-state.js";
+import { ownEntry } from "./own-entry.js";
 
 /** How many times the reader has entered a given scene. */
 export interface SceneVisitMemory {
@@ -10,7 +11,7 @@ export interface SceneVisitMemory {
  * scene's visit count incremented. Pure — `reader` is never mutated.
  */
 export function recordSceneVisit(reader: ReaderState, sceneId: string): ReaderState {
-  const previousCount = reader.visitedScenes[sceneId]?.visitCount ?? 0;
+  const previousCount = ownEntry(reader.visitedScenes, sceneId)?.visitCount ?? 0;
   return {
     ...reader,
     visitedScenes: {
@@ -22,10 +23,10 @@ export function recordSceneVisit(reader: ReaderState, sceneId: string): ReaderSt
 
 /** Whether the reader has entered `sceneId` at least once. */
 export function hasVisitedScene(reader: ReaderState, sceneId: string): boolean {
-  return reader.visitedScenes[sceneId] !== undefined;
+  return ownEntry(reader.visitedScenes, sceneId) !== undefined;
 }
 
 /** How many times the reader has entered `sceneId` (0 if never). */
 export function getSceneVisitCount(reader: ReaderState, sceneId: string): number {
-  return reader.visitedScenes[sceneId]?.visitCount ?? 0;
+  return ownEntry(reader.visitedScenes, sceneId)?.visitCount ?? 0;
 }

@@ -1,4 +1,5 @@
 import type { ReaderState } from "../state/reader-state.js";
+import { ownEntry } from "./own-entry.js";
 
 /**
  * What the reader remembers of one Variant. Deliberately narrow: the
@@ -22,7 +23,7 @@ export interface VariantMemory {
  * the reader.
  */
 export function recordVariantSeen(reader: ReaderState, variantId: string, branchId: string): ReaderState {
-  const previous = reader.seenVariants[variantId];
+  const previous = ownEntry(reader.seenVariants, variantId);
   const memory: VariantMemory = previous
     ? { firstSeenBranchId: previous.firstSeenBranchId, lastSeenBranchId: branchId, seenCount: previous.seenCount + 1 }
     : { firstSeenBranchId: branchId, lastSeenBranchId: branchId, seenCount: 1 };
@@ -43,7 +44,7 @@ export function hasVariantChangedSinceRead(
   variantId: string,
   currentBranchId: string
 ): boolean {
-  const previous = reader.seenVariants[variantId];
+  const previous = ownEntry(reader.seenVariants, variantId);
   if (!previous) return false;
   return previous.lastSeenBranchId !== currentBranchId;
 }
@@ -54,7 +55,7 @@ export function hasVariantChangedSinceRead(
  * 17.15). A pure query — it never records anything itself.
  */
 export function hasSeenVariant(reader: ReaderState, variantId: string): boolean {
-  return reader.seenVariants[variantId] !== undefined;
+  return ownEntry(reader.seenVariants, variantId) !== undefined;
 }
 
 /**
@@ -64,5 +65,5 @@ export function hasSeenVariant(reader: ReaderState, variantId: string): boolean 
  * it never records anything itself.
  */
 export function getLastSeenVariantBranch(reader: ReaderState, variantId: string): string | null {
-  return reader.seenVariants[variantId]?.lastSeenBranchId ?? null;
+  return ownEntry(reader.seenVariants, variantId)?.lastSeenBranchId ?? null;
 }

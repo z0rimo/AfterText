@@ -94,7 +94,8 @@ function validateCalls(
   diagnostics: Diagnostic[]
 ): void {
   for (const call of walkCalls(expression)) {
-    const builtin = READER_MEMORY_BUILTINS[call.callee];
+    // Own keys only: `constructor`, `toString`, ... are not builtins.
+    const builtin = Object.hasOwn(READER_MEMORY_BUILTINS, call.callee) ? READER_MEMORY_BUILTINS[call.callee] : undefined;
     if (!builtin) {
       diagnostics.push(Diagnostics.unknownBuiltin(call.callee, call.span));
       continue;

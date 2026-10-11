@@ -69,7 +69,8 @@ export function evaluateMemoryQuery(
   document: StoryDocument,
   reader: ReaderState
 ): MemoryQueryOutcome {
-  const query = MEMORY_QUERIES[call.callee];
+  // Own keys only: an inherited name (`constructor`, `toString`, ...) is not a builtin.
+  const query = Object.hasOwn(MEMORY_QUERIES, call.callee) ? MEMORY_QUERIES[call.callee] : undefined;
   if (!query) {
     return { ok: false, error: RuntimeErrors.unknownBuiltin(call.callee, call.span) };
   }

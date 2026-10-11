@@ -164,10 +164,20 @@ interface RawPresentationArgs {
 
 const PARAM_TOKEN_PATTERN = /^([A-Za-z_][A-Za-z0-9_]*)=(.+)$/;
 
+/**
+ * A string-keyed dictionary with no prototype, so an author-supplied key such
+ * as `constructor` or `__proto__` is ordinary data: it is never confused with
+ * an inherited property and assigning it never changes the dictionary's
+ * prototype.
+ */
+function dictionary<T>(): Record<string, T> {
+  return Object.create(null) as Record<string, T>;
+}
+
 function tokenizePresentationArgs(argsText: string): RawPresentationArgs {
-  const params: Record<string, string> = {};
-  const paramValueRanges: Record<string, ArgsTextRange> = {};
-  const paramOccurrences: Record<string, number> = {};
+  const params = dictionary<string>();
+  const paramValueRanges = dictionary<ArgsTextRange>();
+  const paramOccurrences = dictionary<number>();
   const positional: string[] = [];
   const positionalRanges: ArgsTextRange[] = [];
   const tokens: ArgsTextToken[] = [];
@@ -288,7 +298,7 @@ function tokenizePresentationArgs(argsText: string): RawPresentationArgs {
   // no range is produced for that key at all. Reuses the token adjacency
   // already scanned above (one extra pass over the small in-memory
   // `tokens` array — not a second scan of `argsText`, not a new grammar).
-  const paramRemovalRanges: Record<string, ArgsTextRange> = {};
+  const paramRemovalRanges = dictionary<ArgsTextRange>();
   tokens.forEach((tok, index) => {
     if (tok.key === undefined || paramOccurrences[tok.key] !== 1) return;
     if (index === 0) {
@@ -408,24 +418,30 @@ function parsePresentation(
   // Absolute source spans for every recognized parameter value (docs/CORE_SPEC.md
   // Section 25.36) — computed once, reused by every return below, always
   // present (an empty record when the directive has no named parameters).
-  const parameterValueSpans: Record<string, SourceSpan> = {};
-  for (const [key, range] of Object.entries(paramValueRanges)) {
-    parameterValueSpans[key] = {
-      start: positionAt(line, argsStartColumn + range.start),
-      end: positionAt(line, argsStartColumn + range.end)
-    };
-  }
+  // Built with `Object.fromEntries` (own data properties) so a key such as
+  // `__proto__` is recorded rather than silently dropped.
+  const parameterValueSpans: Record<string, SourceSpan> = Object.fromEntries(
+    Object.entries(paramValueRanges).map(([key, range]) => [
+      key,
+      {
+        start: positionAt(line, argsStartColumn + range.start),
+        end: positionAt(line, argsStartColumn + range.end)
+      }
+    ])
+  );
 
   // Absolute, duplicate-safe removal spans (docs/CORE_SPEC.md Section
   // 14) — present only for a key with exactly one authored occurrence;
   // computed once, reused by every return below.
-  const parameterRemovalSpans: Record<string, SourceSpan> = {};
-  for (const [key, range] of Object.entries(paramRemovalRanges)) {
-    parameterRemovalSpans[key] = {
-      start: positionAt(line, argsStartColumn + range.start),
-      end: positionAt(line, argsStartColumn + range.end)
-    };
-  }
+  const parameterRemovalSpans: Record<string, SourceSpan> = Object.fromEntries(
+    Object.entries(paramRemovalRanges).map(([key, range]) => [
+      key,
+      {
+        start: positionAt(line, argsStartColumn + range.start),
+        end: positionAt(line, argsStartColumn + range.end)
+      }
+    ])
+  );
 
   // The positional value has a safe, contiguous source span only when
   // there is exactly one positional token (docs/CORE_SPEC.md Section
