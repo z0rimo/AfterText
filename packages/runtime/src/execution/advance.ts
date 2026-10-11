@@ -53,6 +53,12 @@ function selectConditionalBranch(node: ConditionalNode, context: EvaluationConte
   return undefined; // no branch matched — not an error
 }
 
+function describeBlock(block: unknown): string {
+  if (typeof block !== "object" || block === null) return "a missing or non-object block";
+  const type = (block as { readonly type?: unknown }).type;
+  return typeof type === "string" ? `block of unknown type "${type}"` : "a block without a string type";
+}
+
 /**
  * Walks a compiled `StoryDocument`'s blocks, automatically executing
  * non-suspending work (`@set`, Conditional/Variant branch selection) until
@@ -150,9 +156,9 @@ export function advance(
       continue;
     }
 
-    const block = top.blocks[top.index] as StoryBlock;
+    const block = top.blocks[top.index] as StoryBlock | undefined;
 
-    switch (block.type) {
+    switch (block?.type) {
       case "Paragraph":
       case "Heading": {
         frames = withNextIndex(frames);
@@ -232,6 +238,14 @@ export function advance(
 
       case "Goto": {
         return navigateTo(document, { ...runtimeState, story, reader }, frames, block.target);
+      }
+
+      default: {
+        // Invariant violation (17.11): a block the interpreter cannot execute
+        // (a type from another compiler version, or a malformed cursor index
+        // that no longer points at a block). Stop here — cursor and state are
+        // returned as they stand — rather than loop without progress (17.12).
+        return commit(frames, { type: "error", error: RuntimeErrors.invalidExecutionBlock(describeBlock(block)) });
       }
     }
   }
