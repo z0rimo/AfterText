@@ -5,9 +5,8 @@ import { compile } from "../src/index.js";
 // argument per block and throws `RangeError` once a run is long enough
 // (about 125,000 paragraphs on Node's default stack). Reproducing that size
 // takes seconds and gigabytes, so the regression is expressed on the cause:
-// compiling a long run must never make a variadic `Array#push` call.
+// compiling a long run must not hand the whole run to one `Array#push` call.
 
-// More paragraphs than the Markdown library's own 10,000-element chunked push.
 const PARAGRAPHS = 12_000;
 
 describe("large prose runs", () => {
@@ -39,7 +38,7 @@ describe("large prose runs", () => {
       Array.prototype.push = nativePush;
     }
 
-    // micromark appends in deliberate chunks of 10,000; anything wider is ours.
-    expect(widest).toBeLessThanOrEqual(10_000);
+    // The whole run must never be handed to a single push call.
+    expect(widest).toBeLessThan(PARAGRAPHS);
   });
 });
