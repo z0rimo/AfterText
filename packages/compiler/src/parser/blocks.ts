@@ -940,31 +940,31 @@ function parseVariant(
  */
 function skipConstruct(lines: readonly SourceLine[], openIndex: number): number {
   let level = 0;
-  // parseChoice treats its body as opaque up to the first `@end` (or `@scene`):
-  // directive-shaped lines inside it are ignored, so they must not open anything here.
   let inChoice = false;
   for (let j = openIndex; j < lines.length; j++) {
-    const directive = matchDirectiveLine((lines[j] as SourceLine).text);
-    if (!directive) continue;
-    if (directive.name === "scene" && j > openIndex) return j;
-    if (inChoice) {
-      if (directive.name === "end") {
-        inChoice = false;
-        level -= 1;
-        if (level === 0) return j + 1;
-      }
-      continue;
-    }
-    if (directive.name === "if" || directive.name === "variant") level += 1;
-    else if (directive.name === "choice") {
-      level += 1;
-      inChoice = true;
-    } else if (directive.name === "end") {
-      level -= 1;
-      if (level === 0) return j + 1;
-    }
+    const name = matchDirectiveLine((lines[j] as SourceLine).text)?.name;
+    if (name === undefined) continue;
+    if (name === "scene" && j > openIndex) return j;
+    const step = skipStep(name, inChoice);
+    level += step.delta;
+    inChoice = step.inChoice;
+    if (step.delta < 0 && level === 0) return j + 1;
   }
   return lines.length;
+}
+
+/**
+ * How one directive changes `skipConstruct`'s scan: the nesting-level delta
+ * and whether it is inside a `@choice` body. `parseChoice` treats its body as
+ * opaque up to the first `@end`, so directive-shaped lines inside it open
+ * nothing here either.
+ */
+function skipStep(name: string, inChoice: boolean): { delta: number; inChoice: boolean } {
+  if (name === "end") return { delta: -1, inChoice: false };
+  if (inChoice) return { delta: 0, inChoice };
+  if (name === "choice") return { delta: 1, inChoice: true };
+  if (name === "if" || name === "variant") return { delta: 1, inChoice };
+  return { delta: 0, inChoice };
 }
 
 /**
