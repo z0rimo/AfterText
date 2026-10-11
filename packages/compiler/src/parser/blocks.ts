@@ -1004,7 +1004,11 @@ export function parseBlockSequence(
   let proseStart = -1;
 
   const flushProse = (endExclusive: number): void => {
-    if (proseStart !== -1) blocks.push(...parseProseRun(lines, proseStart, endExclusive, diagnostics));
+    if (proseStart !== -1) {
+      // Not `push(...run)`: a spread passes every element as a call argument,
+      // which overflows the engine's argument/stack limit for a very long run.
+      for (const block of parseProseRun(lines, proseStart, endExclusive, diagnostics)) blocks.push(block);
+    }
     proseStart = -1;
   };
 
