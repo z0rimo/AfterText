@@ -1362,6 +1362,8 @@ Runtime execution errors are a distinct concern from compiler `Diagnostic`s (Sec
 1. **Author/story semantic errors** — the compiled story, combined with actual runtime data, asks for something undefined: an unknown identifier, a non-boolean used as a condition, a type mismatch in arithmetic/ordering, division/modulo by zero, or a `ChoiceNode` with no available items.
 2. **Invariant/precondition violations** — something outside the story's own narrative logic is wrong: a `@goto`/choice target that does not resolve to a real scene (the execution layer assumes it is given a `StoryDocument` with `CompileResult.hasErrors === false`; running a document with unresolved compiler errors is unsupported), or a consumer calling `selectChoice` with an index that is not part of the supplied choice suspension's item set.
 
+This category also covers a block the interpreter cannot execute — a block whose `type` is not one of the known block kinds (for example one produced by a different compiler version), or an `ExecutionCursor` whose index no longer points at a block. `advance` returns a runtime error of kind `invalid-execution-block` for it, leaving the cursor on that position and keeping any automatic work completed earlier in the call (progressive, below). It never skips the block silently and never loops without progress (17.12).
+
 An **execution-step limit exceeded** error (17.12) is a third, distinct case: neither a story mistake nor a contract violation, but a protection mechanism tripping.
 
 The exact error type/shape is FUTURE work (not designed here) but should stay narrow — likely a small discriminated union carrying a category and a message, not a code registry mirroring the compiler's `Diagnostic`.

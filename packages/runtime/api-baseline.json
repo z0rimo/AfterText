@@ -130,6 +130,7 @@
         "readonly property emptyChoice: (SourceSpan?) => RuntimeExecutionError",
         "readonly property invalidArithmeticResult: (SourceSpan?) => RuntimeExecutionError",
         "readonly property invalidChoiceSelection: (string) => RuntimeExecutionError",
+        "readonly property invalidExecutionBlock: (string, SourceSpan?) => RuntimeExecutionError",
         "readonly property invalidSceneTarget: (string, SourceSpan?) => RuntimeExecutionError",
         "readonly property invalidVariantReference: (string, SourceSpan?) => RuntimeExecutionError",
         "readonly property stepLimitExceeded: () => RuntimeExecutionError",
@@ -141,7 +142,7 @@
     "RuntimeExecutionError": {
       "kind": "interface",
       "members": [
-        "readonly property kind: \"division-by-zero\" | \"empty-choice\" | \"invalid-arithmetic-result\" | \"invalid-choice-selection\" | \"invalid-scene-target\" | \"invalid-variant-reference\" | \"step-limit-exceeded\" | \"type-mismatch\" | \"unknown-builtin\" | \"unknown-identifier\"",
+        "readonly property kind: \"division-by-zero\" | \"empty-choice\" | \"invalid-arithmetic-result\" | \"invalid-choice-selection\" | \"invalid-execution-block\" | \"invalid-scene-target\" | \"invalid-variant-reference\" | \"step-limit-exceeded\" | \"type-mismatch\" | \"unknown-builtin\" | \"unknown-identifier\"",
         "readonly property message: string",
         "readonly property span?: SourceSpan"
       ]
@@ -153,6 +154,7 @@
         "union \"empty-choice\"",
         "union \"invalid-arithmetic-result\"",
         "union \"invalid-choice-selection\"",
+        "union \"invalid-execution-block\"",
         "union \"invalid-scene-target\"",
         "union \"invalid-variant-reference\"",
         "union \"step-limit-exceeded\"",

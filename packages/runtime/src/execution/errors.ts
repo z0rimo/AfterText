@@ -17,7 +17,8 @@ export type RuntimeExecutionErrorKind =
   | "invalid-scene-target"
   | "step-limit-exceeded"
   | "unknown-builtin"
-  | "invalid-variant-reference";
+  | "invalid-variant-reference"
+  | "invalid-execution-block";
 
 export interface RuntimeExecutionError {
   readonly kind: RuntimeExecutionErrorKind;
@@ -63,5 +64,8 @@ export const RuntimeErrors = {
   },
   invalidVariantReference(variantId: string, span?: SourceSpan): RuntimeExecutionError {
     return error("invalid-variant-reference", `Reference to unknown Variant "${variantId}".`, span);
+  },
+  invalidExecutionBlock(description: string, span?: SourceSpan): RuntimeExecutionError {
+    return error("invalid-execution-block", `Cannot execute ${description}.`, span);
   }
 } as const;
