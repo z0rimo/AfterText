@@ -332,6 +332,8 @@ A document without an explicit scene receives a deterministic synthetic `main` s
 
 Leading prose before an explicit scene is also preserved through the synthetic-main mechanism.
 
+A scene id is the non-empty, whitespace-trimmed text after `@scene`. It is an opaque authored string: it may contain internal spaces, Unicode and punctuation, and it has no lexical restriction beyond being non-empty. In particular it is **not** subject to the Choice target grammar (see Choices), so not every valid scene id can be written as an unquoted Choice target.
+
 Empty-string scene IDs are forbidden. A `@scene` directive with no id raises `AT1008`; the best-effort Scene node is still produced with `id` `""` (no id is invented).
 
 ---
@@ -394,6 +396,20 @@ Fallback.
 
 @end
 ```
+
+**Choice target grammar (current, intentional).** An unquoted Choice target matches `[A-Za-z][A-Za-z0-9_-]*`, optionally followed by separator whitespace, `if`, separator whitespace and a condition. This is narrower than the scene id namespace: `@scene` declares, and `@goto` and the Reader Memory builtins (`visited("…")`, Section 17) refer to, scene ids of any shape, but a Choice can name only scenes whose id fits the pattern above. For example:
+
+| Scene id | `@scene` / `@goto` / `visited()` | Unquoted Choice target |
+|---|---|---|
+| `room`, `a-b_c` | valid | valid |
+| `방`, `café` | valid | `AT1005` |
+| `my scene` | valid | `AT1005` |
+| `1abc`, `_x`, `a.b` | valid | `AT1005` |
+| `room if dark` | valid | read as target `room` with condition `dark` (`AT1004` if no scene `room`) |
+
+This is a limitation of the Choice target syntax, not a restriction on scene ids, and `@goto` is not narrowed to match it. A Choice cannot currently reach such scenes directly; an author can route through an intermediate scene with an identifier-shaped id that uses `@goto`.
+
+*Future direction (not implemented; no behavior change here).* A quoted Choice target, for example `- Go -> "my scene"`, is the intended additive way to express any scene id. The unquoted form stays valid and the scene id namespace is not restricted. Quote escaping, the target source span, the Section 25.40 source-generation helpers and editor integration are left to a separate design.
 
 The condition delimiter belongs to the target portion of the choice grammar.
 
