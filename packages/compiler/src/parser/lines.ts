@@ -27,7 +27,7 @@ export function splitLines(source: string): SourceLine[] {
   // recognized exactly as in a BOM-less file. Offsets stay relative to the
   // original string (the BOM occupies offset 0), and column 1 is the first
   // character after it. Only a single U+FEFF at the very start is skipped.
-  const bomLength = source.charCodeAt(0) === 0xfeff ? 1 : 0;
+  const bomLength = source.codePointAt(0) === 0xfeff ? 1 : 0;
 
   for (let i = 0; i <= source.length; i++) {
     if (i === source.length || source[i] === "\n") {
