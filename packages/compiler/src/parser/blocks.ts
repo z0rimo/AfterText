@@ -24,6 +24,7 @@ import {
   type SimplePresentationDirective
 } from "./directive-line.js";
 import { joinLineText, lineEnd, lineStart, positionAt, type SourceLine } from "./lines.js";
+import { MAX_BLOCK_DEPTH } from "../limits.js";
 import { parseProseChunk } from "./markdown.js";
 import { ExpressionSyntaxError, parseExpression } from "./expression-parser.js";
 import { RESERVED_VARIABLE_NAMES } from "./expression-lexer.js";
@@ -769,7 +770,8 @@ function parseChoice(
 function parseConditional(
   lines: readonly SourceLine[],
   openIndex: number,
-  diagnostics: Diagnostic[]
+  diagnostics: Diagnostic[],
+  depth: number
 ): { block: ConditionalNode; nextIndex: number } {
   const openLine = lines[openIndex] as SourceLine;
   const branches: ConditionalBranch[] = [];
@@ -793,7 +795,7 @@ function parseConditional(
         : undefined;
 
     idx += 1;
-    const seq = parseBlockSequence(lines, idx, diagnostics, new Set(["elseif", "else", "end"]));
+    const seq = parseBlockSequence(lines, idx, diagnostics, new Set(["elseif", "else", "end"]), depth + 1);
     const branchSpan = {
       start: lineStart(branchLine),
       end: seq.blocks.length > 0 ? (seq.blocks[seq.blocks.length - 1] as StoryBlock).span.end : lineEnd(branchLine)
@@ -835,7 +837,8 @@ function parseConditional(
 function parseVariant(
   lines: readonly SourceLine[],
   openIndex: number,
-  diagnostics: Diagnostic[]
+  diagnostics: Diagnostic[],
+  depth: number
 ): { block: VariantNode; nextIndex: number } {
   const openLine = lines[openIndex] as SourceLine;
   const openDirective = matchDirectiveLine(openLine.text) as ParsedDirectiveLine;
@@ -859,7 +862,7 @@ function parseVariant(
   let lastEnd = lineEnd(openLine);
 
   let idx = openIndex + 1;
-  let seq = parseBlockSequence(lines, idx, diagnostics, new Set(["when", "otherwise", "end"]));
+  let seq = parseBlockSequence(lines, idx, diagnostics, new Set(["when", "otherwise", "end"]), depth + 1);
   idx = seq.nextIndex;
 
   while (seq.stoppedBy === "when" || seq.stoppedBy === "otherwise") {
@@ -888,7 +891,7 @@ function parseVariant(
         : undefined;
 
     idx += 1;
-    const bodySeq = parseBlockSequence(lines, idx, diagnostics, new Set(["when", "otherwise", "end"]));
+    const bodySeq = parseBlockSequence(lines, idx, diagnostics, new Set(["when", "otherwise", "end"]), depth + 1);
     const branchSpan = {
       start: lineStart(branchLine),
       end:
@@ -929,6 +932,42 @@ function parseVariant(
 }
 
 /**
+ * Returns the index just past the `@end` that closes the construct opened at
+ * `openIndex`, counting nested `@if` / `@variant` / `@choice` openers (a `@choice` body is opaque
+ * up to its first `@end`, matching `parseChoice`). Stops
+ * early at a `@scene` line (scenes bound every construct) or end of input.
+ * Iterative on purpose: it is used on input too deep to recurse over.
+ */
+function skipConstruct(lines: readonly SourceLine[], openIndex: number): number {
+  let level = 0;
+  let inChoice = false;
+  for (let j = openIndex; j < lines.length; j++) {
+    const name = matchDirectiveLine((lines[j] as SourceLine).text)?.name;
+    if (name === undefined) continue;
+    if (name === "scene" && j > openIndex) return j;
+    const step = skipStep(name, inChoice);
+    level += step.delta;
+    inChoice = step.inChoice;
+    if (step.delta < 0 && level === 0) return j + 1;
+  }
+  return lines.length;
+}
+
+/**
+ * How one directive changes `skipConstruct`'s scan: the nesting-level delta
+ * and whether it is inside a `@choice` body. `parseChoice` treats its body as
+ * opaque up to the first `@end`, so directive-shaped lines inside it open
+ * nothing here either.
+ */
+function skipStep(name: string, inChoice: boolean): { delta: number; inChoice: boolean } {
+  if (name === "end") return { delta: -1, inChoice: false };
+  if (inChoice) return { delta: 0, inChoice };
+  if (name === "choice") return { delta: 1, inChoice: true };
+  if (name === "if" || name === "variant") return { delta: 1, inChoice };
+  return { delta: 0, inChoice };
+}
+
+/**
  * Parses a run of lines into StoryBlocks until either a directive in
  * `terminators` is reached, a `@scene` line is reached (scenes always
  * bound any enclosing construct), or the input is exhausted.
@@ -941,28 +980,16 @@ export function parseBlockSequence(
   lines: readonly SourceLine[],
   start: number,
   diagnostics: Diagnostic[],
-  terminators: ReadonlySet<string>
+  terminators: ReadonlySet<string>,
+  depth = 0
 ): BlockSequenceResult {
   const blocks: StoryBlock[] = [];
   let i = start;
   let proseStart = -1;
 
   const flushProse = (endExclusive: number): void => {
-    if (proseStart === -1) return;
-    const chunkLines = lines.slice(proseStart, endExclusive);
+    if (proseStart !== -1) blocks.push(...parseProseRun(lines, proseStart, endExclusive, diagnostics));
     proseStart = -1;
-    if (chunkLines.length === 0) return;
-
-    const text = joinLineText(chunkLines);
-    if (text.trim().length === 0) return;
-
-    const first = chunkLines[0] as SourceLine;
-    const proseBlocks = parseProseChunk(
-      text,
-      { startLine: first.number, startOffset: first.startOffset },
-      diagnostics
-    );
-    blocks.push(...proseBlocks);
   };
 
   while (i < lines.length) {
@@ -975,89 +1002,107 @@ export function parseBlockSequence(
       continue;
     }
 
+    flushProse(i);
+
     if (directive.name === "scene" || terminators.has(directive.name)) {
-      flushProse(i);
       return { blocks, nextIndex: i, stoppedBy: directive.name };
     }
 
-    flushProse(i);
+    const parsed = parseDirectiveBlock(directive, lines, i, diagnostics, depth);
+    if (parsed.block) blocks.push(parsed.block);
+    i = parsed.nextIndex;
+  }
 
-    if (SIMPLE_PRESENTATION_SET.has(directive.name)) {
-      const node = parsePresentation(
+  flushProse(i);
+  return { blocks, nextIndex: i, stoppedBy: null };
+}
+
+/** Parses the prose lines `[startIndex, endExclusive)` (no directives) into Markdown blocks. */
+function parseProseRun(
+  lines: readonly SourceLine[],
+  startIndex: number,
+  endExclusive: number,
+  diagnostics: Diagnostic[]
+): StoryBlock[] {
+  const chunkLines = lines.slice(startIndex, endExclusive);
+  if (chunkLines.length === 0) return [];
+
+  const text = joinLineText(chunkLines);
+  if (text.trim().length === 0) return [];
+
+  const first = chunkLines[0] as SourceLine;
+  return parseProseChunk(text, { startLine: first.number, startOffset: first.startOffset }, diagnostics);
+}
+
+/**
+ * Parses the single directive (or construct) starting at `lines[index]`.
+ * `block` is undefined when the directive produces no node (an invalid
+ * presentation/set, a stray terminator, an unknown directive, or an
+ * over-deep construct that was skipped).
+ */
+function parseDirectiveBlock(
+  directive: ParsedDirectiveLine,
+  lines: readonly SourceLine[],
+  index: number,
+  diagnostics: Diagnostic[],
+  depth: number
+): { block: StoryBlock | undefined; nextIndex: number } {
+  const line = lines[index] as SourceLine;
+  const single = (block: StoryBlock | undefined) => ({ block, nextIndex: index + 1 });
+
+  if (SIMPLE_PRESENTATION_SET.has(directive.name)) {
+    return single(
+      parsePresentation(
         directive.name as SimplePresentationDirective,
         directive.args,
         spanOf(line),
         line,
         directive.argsStartColumn,
         diagnostics
-      );
-      if (node) blocks.push(node);
-      i += 1;
-      continue;
-    }
-
-    switch (directive.name) {
-      case "set": {
-        const node = parseSet(directive, line, diagnostics);
-        if (node) blocks.push(node);
-        i += 1;
-        break;
-      }
-      case "goto": {
-        const targetSourceSpan: SourceSpan = {
-          start: positionAt(line, directive.argsStartColumn),
-          end: positionAt(line, directive.argsStartColumn + directive.args.length)
-        };
-        const node: GotoNode = {
-          type: "Goto",
-          target: directive.args.trim(),
-          span: spanOf(line),
-          targetSourceSpan
-        };
-        blocks.push(node);
-        i += 1;
-        break;
-      }
-      case "if": {
-        const { block, nextIndex } = parseConditional(lines, i, diagnostics);
-        blocks.push(block);
-        i = nextIndex;
-        break;
-      }
-      case "variant": {
-        const { block, nextIndex } = parseVariant(lines, i, diagnostics);
-        blocks.push(block);
-        i = nextIndex;
-        break;
-      }
-      case "choice": {
-        const { block, nextIndex } = parseChoice(lines, i, diagnostics);
-        blocks.push(block);
-        i = nextIndex;
-        break;
-      }
-      case "elseif":
-      case "else":
-      case "end":
-      case "when":
-      case "otherwise": {
-        // A terminator directive outside the construct it belongs to (the
-        // matching construct parser above always intercepts these via
-        // `terminators`). No dedicated diagnostic code covers this shape
-        // of error in v0.1 — skip defensively rather than crash.
-        i += 1;
-        break;
-      }
-      default: {
-        diagnostics.push(Diagnostics.unknownDirective(directive.name, spanOf(line)));
-        i += 1;
-        break;
-      }
-    }
+      )
+    );
   }
 
-  flushProse(i);
-  return { blocks, nextIndex: i, stoppedBy: null };
+  switch (directive.name) {
+    case "set":
+      return single(parseSet(directive, line, diagnostics));
+    case "goto": {
+      const node: GotoNode = {
+        type: "Goto",
+        target: directive.args.trim(),
+        span: spanOf(line),
+        targetSourceSpan: {
+          start: positionAt(line, directive.argsStartColumn),
+          end: positionAt(line, directive.argsStartColumn + directive.args.length)
+        }
+      };
+      return single(node);
+    }
+    case "if":
+    case "variant":
+      if (depth >= MAX_BLOCK_DEPTH) {
+        diagnostics.push(Diagnostics.blocksNestedTooDeeply(MAX_BLOCK_DEPTH, spanOf(line)));
+        return { block: undefined, nextIndex: skipConstruct(lines, index) };
+      }
+      return directive.name === "if"
+        ? parseConditional(lines, index, diagnostics, depth)
+        : parseVariant(lines, index, diagnostics, depth);
+    case "choice":
+      return parseChoice(lines, index, diagnostics);
+    case "elseif":
+    case "else":
+    case "end":
+    case "when":
+    case "otherwise":
+      // A terminator directive outside the construct it belongs to (the
+      // matching construct parser always intercepts these via
+      // `terminators`). No dedicated diagnostic code covers this shape
+      // of error in v0.1 — skip defensively rather than crash.
+      return single(undefined);
+    default:
+      diagnostics.push(Diagnostics.unknownDirective(directive.name, spanOf(line)));
+      return single(undefined);
+  }
 }
 
 /**

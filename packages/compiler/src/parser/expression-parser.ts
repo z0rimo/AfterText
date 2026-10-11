@@ -10,6 +10,7 @@ import {
   tokenizeExpression,
   type ExpressionToken
 } from "./expression-lexer.js";
+import { MAX_EXPRESSION_DEPTH } from "../limits.js";
 
 export { ExpressionSyntaxError };
 
@@ -39,6 +40,10 @@ const UNARY_OPERATORS = new Set(["!", "-"]);
 class ExpressionParser {
   private readonly tokens: readonly ExpressionToken[];
   private pos = 0;
+  /** Current parser recursion depth (parentheses, unary chains, call arguments). */
+  private depth = 0;
+  /** Height of every node built so far, so left-deep chains are bounded too. */
+  private readonly heights = new WeakMap<ExpressionNode, number>();
 
   constructor(
     source: string,
@@ -84,7 +89,39 @@ class ExpressionParser {
     };
   }
 
+  private heightOf(node: ExpressionNode): number {
+    return this.heights.get(node) ?? 1;
+  }
+
+  /** Records `node`'s height (one more than its tallest child) and enforces the depth limit. */
+  private track<T extends ExpressionNode>(node: T, children: readonly ExpressionNode[], offset: number): T {
+    let tallest = 0;
+    for (const child of children) tallest = Math.max(tallest, this.heightOf(child));
+    const height = tallest + 1;
+    if (height > MAX_EXPRESSION_DEPTH) this.tooDeep(offset);
+    this.heights.set(node, height);
+    return node;
+  }
+
+  private tooDeep(offset: number): never {
+    throw new ExpressionSyntaxError(`expression is nested too deeply (limit ${MAX_EXPRESSION_DEPTH})`, offset);
+  }
+
+  private enter(): void {
+    this.depth += 1;
+    if (this.depth > MAX_EXPRESSION_DEPTH) this.tooDeep(this.current().start);
+  }
+
   private parseExpression(minPrecedence: number): ExpressionNode {
+    this.enter();
+    try {
+      return this.parseExpressionBody(minPrecedence);
+    } finally {
+      this.depth -= 1;
+    }
+  }
+
+  private parseExpressionBody(minPrecedence: number): ExpressionNode {
     let left = this.parseUnary();
 
     for (;;) {
@@ -95,31 +132,44 @@ class ExpressionParser {
 
       this.advance();
       const right = this.parseExpression(precedence + 1);
-      left = {
-        type: "Binary",
-        operator: token.text as BinaryOperator,
-        left,
-        right,
-        span: this.spanFor(left.span.start.offset - this.basePosition.offset, right.span.end.offset - this.basePosition.offset)
-      };
+      left = this.track(
+        {
+          type: "Binary",
+          operator: token.text as BinaryOperator,
+          left,
+          right,
+          span: this.spanFor(left.span.start.offset - this.basePosition.offset, right.span.end.offset - this.basePosition.offset)
+        },
+        [left, right],
+        token.start
+      );
     }
 
     return left;
   }
 
   private parseUnary(): ExpressionNode {
-    const token = this.current();
-    if (token.type === "punct" && UNARY_OPERATORS.has(token.text)) {
-      this.advance();
-      const argument = this.parseUnary();
-      return {
-        type: "Unary",
-        operator: token.text as UnaryOperator,
-        argument,
-        span: this.spanFor(token.start, argument.span.end.offset - this.basePosition.offset)
-      };
+    this.enter();
+    try {
+      const token = this.current();
+      if (token.type === "punct" && UNARY_OPERATORS.has(token.text)) {
+        this.advance();
+        const argument = this.parseUnary();
+        return this.track(
+          {
+            type: "Unary",
+            operator: token.text as UnaryOperator,
+            argument,
+            span: this.spanFor(token.start, argument.span.end.offset - this.basePosition.offset)
+          },
+          [argument],
+          token.start
+        );
+      }
+      return this.parsePrimary();
+    } finally {
+      this.depth -= 1;
     }
-    return this.parsePrimary();
   }
 
   private parsePrimary(): ExpressionNode {
@@ -215,12 +265,16 @@ class ExpressionParser {
     }
     this.advance();
 
-    return {
-      type: "Call",
-      callee: nameToken.text,
+    return this.track(
+      {
+        type: "Call",
+        callee: nameToken.text,
+        args,
+        span: this.spanFor(nameToken.start, closing.end)
+      },
       args,
-      span: this.spanFor(nameToken.start, closing.end)
-    };
+      nameToken.start
+    );
   }
 }
 

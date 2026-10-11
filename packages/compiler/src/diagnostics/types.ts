@@ -18,6 +18,7 @@ export type DiagnosticCode =
   | "AT1004" // unknown scene reference
   | "AT1005" // malformed choice item (bullet line that fails to parse as one)
   | "AT1006" // conditional branch appears after "@else" (must be last)
+  | "AT1007" // @if / @variant constructs nested too deeply
   | "AT1101" // duplicate variant id
   | "AT1102" // variant with no @when branch
   | "AT1103" // unknown Variant reference (e.g. a Reader Memory query argument)

@@ -847,6 +847,7 @@ The `DiagnosticCode` type currently contains exactly the codes below. Existing c
 | `AT1004` | error | Reference to an unknown scene (goto, choice target, or entry). | Validation |
 | `AT1005` | error | Malformed choice item: bullet line with no `->` target, or an invalid target tail. | Parser |
 | `AT1006` | error | A conditional branch appears after `@else`; `@else` must be last. | Validation |
+| `AT1007` | error | `@if` / `@variant` constructs are nested more than 64 levels deep; the over-deep construct is skipped. | Parser |
 | `AT1101` | error | Duplicate variant id. | Validation |
 | `AT1102` | error | Variant has no `@when` branch. | Validation |
 | `AT1103` | error | Reference to an unknown variant (for example a Reader Memory query argument). | Validation |
