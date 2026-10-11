@@ -897,11 +897,12 @@ function parseVariant(
 
   // Content between the `@variant` header and the first branch belongs to no
   // branch and is not kept in the AST; report the range that is ignored.
-  if (seq.blocks.length > 0) {
+  const ignored = seq.blocks;
+  if (ignored.length > 0) {
     diagnostics.push(
       Diagnostics.variantContentBeforeBranch({
-        start: (seq.blocks[0] as StoryBlock).span.start,
-        end: (seq.blocks[seq.blocks.length - 1] as StoryBlock).span.end
+        start: (ignored[0] as StoryBlock).span.start,
+        end: (ignored.at(-1) as StoryBlock).span.end
       })
     );
   }
