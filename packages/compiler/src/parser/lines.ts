@@ -22,6 +22,12 @@ export function splitLines(source: string): SourceLine[] {
   const lines: SourceLine[] = [];
   let start = 0;
   let lineNumber = 1;
+  // A leading UTF-8 byte-order mark is an encoding signature, not authored
+  // text: the first line starts after it so `@scene`, `---` and `#` are
+  // recognized exactly as in a BOM-less file. Offsets stay relative to the
+  // original string (the BOM occupies offset 0), and column 1 is the first
+  // character after it. Only a single U+FEFF at the very start is skipped.
+  const bomLength = source.charCodeAt(0) === 0xfeff ? 1 : 0;
 
   for (let i = 0; i <= source.length; i++) {
     if (i === source.length || source[i] === "\n") {
@@ -31,11 +37,12 @@ export function splitLines(source: string): SourceLine[] {
         end -= 1;
         newlineLength = 2;
       }
+      const textStart = lineNumber === 1 ? Math.min(start + bomLength, end) : start;
       lines.push({
         number: lineNumber,
-        startOffset: start,
+        startOffset: textStart,
         endOffset: end,
-        text: source.slice(start, end),
+        text: source.slice(textStart, end),
         newlineLength
       });
       lineNumber += 1;

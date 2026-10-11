@@ -24,6 +24,16 @@ function isAllowedScalarNode(node: Node | null | undefined): node is { value: St
   return value === null || typeof value === "string" || typeof value === "number" || typeof value === "boolean";
 }
 
+/**
+ * YAML resolves `.inf`, `-.inf`, `.nan` and out-of-range literals such as
+ * `1e999` to non-finite numbers, which JSON cannot represent (they would
+ * serialize as `null`). The same finite-number rule applies to every other
+ * numeric input (Section 24.2).
+ */
+function isFiniteStateValue(value: StateValue): boolean {
+  return typeof value !== "number" || Number.isFinite(value);
+}
+
 function keyName(key: unknown): string {
   return isScalar(key) ? String(key.value) : String(key);
 }
@@ -143,10 +153,22 @@ export function extractFrontmatter(source: string): FrontmatterResult {
       const key = keyName(pair.key);
       const value = pair.value;
 
-      if (key === "title" && isAllowedScalarNode(value) && typeof value.value === "string") {
-        title = value.value;
-      } else if (key === "entry" && isAllowedScalarNode(value) && typeof value.value === "string") {
-        entry = value.value;
+      if (key === "title" || key === "entry") {
+        // A string is used; an absent or null value means "not set"; anything
+        // else (`entry: 123`, `title: true`, a list or map) would otherwise be
+        // dropped without a word, silently changing the entry scene or title.
+        if (isScalar(value) && typeof value.value === "string") {
+          if (key === "title") title = value.value;
+          else entry = value.value;
+        } else if (!hasYamlSyntaxErrors && value && !(isScalar(value) && value.value === null)) {
+          // (not checked after a YAML syntax error: the recovered tree is unreliable)
+          diagnostics.push(
+            Diagnostics.invalidFrontmatter(
+              `"${key}" must be a string; quote the value if it is meant as text.`,
+              spanOfNode(value)
+            )
+          );
+        }
       } else if (key === "state" && !hasYamlSyntaxErrors) {
         // Skip semantic validation of `state:` entirely when the YAML
         // itself failed to parse cleanly — the tree the parser recovers
@@ -165,7 +187,7 @@ export function extractFrontmatter(source: string): FrontmatterResult {
               diagnostics.push(
                 Diagnostics.unsupportedStateKey(stateKey, keyProblem, spanOfNode(keyNode ?? stateValue ?? value))
               );
-            } else if (isAllowedScalarNode(stateValue)) {
+            } else if (isAllowedScalarNode(stateValue) && isFiniteStateValue(stateValue.value)) {
               state[stateKey] = stateValue.value;
             } else {
               diagnostics.push(
