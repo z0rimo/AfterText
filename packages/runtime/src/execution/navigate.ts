@@ -1,4 +1,4 @@
-import type { StoryDocument } from "@aftertext/compiler";
+import type { SourceSpan, StoryDocument } from "@aftertext/compiler";
 import type { RuntimeState } from "../state/runtime-state.js";
 import { INITIAL_CURSOR, type ExecutionCursor } from "./cursor.js";
 import { RuntimeErrors } from "./errors.js";
@@ -16,6 +16,10 @@ import type { ExecutionStep } from "./result.js";
  * the walk. Never touches `ReaderState.visitedScenes`
  * (`navigated != experienced`).
  *
+ * `span` is the authored range of the target when the caller has one (a
+ * `GotoNode`'s `targetSourceSpan`); a Choice selection has none, since an
+ * offered item carries no source position, and the error stays spanless.
+ *
  * On an invalid target, `runtimeState`/`cursor` are echoed back exactly as
  * given — execution is progressive, not transactional (17.11): any
  * automatic work already completed earlier in the same call is preserved
@@ -25,11 +29,12 @@ export function navigateTo(
   document: StoryDocument,
   runtimeState: RuntimeState,
   cursor: ExecutionCursor,
-  target: string
+  target: string,
+  span?: SourceSpan
 ): ExecutionStep {
   const targetScene = document.scenes.find((scene) => scene.id === target);
   if (!targetScene) {
-    return { runtimeState, cursor, result: { type: "error", error: RuntimeErrors.invalidSceneTarget(target) } };
+    return { runtimeState, cursor, result: { type: "error", error: RuntimeErrors.invalidSceneTarget(target, span) } };
   }
 
   const from = runtimeState.navigation.sceneId;
