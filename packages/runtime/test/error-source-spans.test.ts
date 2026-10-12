@@ -32,6 +32,20 @@ describe("source spans on runtime execution errors", () => {
     expect(error.span!.start.line).toBe(3);
   });
 
+  it("an invalid @goto nested in a conditional carries that GotoNode's targetSourceSpan", () => {
+    const source = "@scene s\n@if true\n@goto nowhere\n@end\n";
+    const { document } = compile(source);
+    const conditional = document.scenes[0]!.blocks[0]!;
+    if (conditional.type !== "Conditional") throw new Error("expected Conditional");
+    const goto = conditional.branches[0]!.blocks[0]!;
+    if (goto.type !== "Goto") throw new Error("expected Goto");
+
+    const error = errorOf(advance(document, createRuntimeState(document)));
+    expect(error.kind).toBe("invalid-scene-target");
+    expect(error.span).toEqual(goto.targetSourceSpan);
+    expect(sliced(source, error.span)).toBe("nowhere");
+  });
+
   it("an empty @goto target reports its zero-width target span", () => {
     const source = "@scene s\n@goto\n";
     const { document } = compile(source);
@@ -65,7 +79,7 @@ describe("source spans on runtime execution errors", () => {
     const broken = { ...document, scenes: [{ ...first!, blocks: [bare] }, ...rest] };
     const error = errorOf(advance(broken, state));
     expect(error.kind).toBe("invalid-scene-target");
-    expect("span" in error).toBe(false);
+    expect(error.span).toBeUndefined();
   });
 
   it("remains spanless where no authored source position is known", () => {
