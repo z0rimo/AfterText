@@ -20,10 +20,12 @@ export type DiagnosticCode =
   | "AT1006" // conditional branch appears after "@else" (must be last)
   | "AT1007" // @if / @variant constructs nested too deeply
   | "AT1008" // @scene declaration without an id
+  | "AT1009" // known directive outside the construct/context where it is valid
   | "AT1101" // duplicate variant id
   | "AT1102" // variant with no @when branch
   | "AT1103" // unknown Variant reference (e.g. a Reader Memory query argument)
   | "AT1104" // variant branch appears after "@otherwise" (must be last)
+  | "AT1105" // content before a variant's first branch is ignored
   | "AT1201" // unsupported initial state entry (value or key)
   | "AT1202" // invalid frontmatter (YAML syntax error, or title/entry not a string)
   | "AT1301" // malformed presentation directive

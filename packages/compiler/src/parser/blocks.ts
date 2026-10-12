@@ -19,6 +19,7 @@ import type { Diagnostic } from "../diagnostics/types.js";
 import { Diagnostics } from "../diagnostics/codes.js";
 import {
   matchDirectiveLine,
+  REGISTERED_DIRECTIVES,
   SIMPLE_PRESENTATION_DIRECTIVES,
   type ParsedDirectiveLine,
   type SimplePresentationDirective
@@ -692,6 +693,19 @@ function parseChoice(
       break;
     }
 
+    // A directive-shaped line inside a choice body can never be an item, and
+    // is skipped like any non-item line — but it is authored structure, so it
+    // is reported (unlike ordinary narrative text, which stays a silent skip).
+    if (directive) {
+      diagnostics.push(
+        REGISTERED_DIRECTIVES.has(directive.name)
+          ? Diagnostics.misplacedDirective(directive.name, "inside a choice", spanOf(line))
+          : Diagnostics.unknownDirective(directive.name, spanOf(line))
+      );
+      idx += 1;
+      continue;
+    }
+
     const bulletMatch = CHOICE_BULLET_PATTERN.exec(line.text);
     if (!bulletMatch) {
       idx += 1;
@@ -880,6 +894,18 @@ function parseVariant(
   let idx = openIndex + 1;
   let seq = parseBlockSequence(lines, idx, diagnostics, new Set(["when", "otherwise", "end"]), depth + 1);
   idx = seq.nextIndex;
+
+  // Content between the `@variant` header and the first branch belongs to no
+  // branch and is not kept in the AST; report the range that is ignored.
+  const ignored = seq.blocks;
+  if (ignored.length > 0) {
+    diagnostics.push(
+      Diagnostics.variantContentBeforeBranch({
+        start: (ignored[0] as StoryBlock).span.start,
+        end: (ignored.at(-1) as StoryBlock).span.end
+      })
+    );
+  }
 
   while (seq.stoppedBy === "when" || seq.stoppedBy === "otherwise") {
     const kind = seq.stoppedBy;
@@ -1116,8 +1142,8 @@ function parseDirectiveBlock(
     case "otherwise":
       // A terminator directive outside the construct it belongs to (the
       // matching construct parser always intercepts these via
-      // `terminators`). No dedicated diagnostic code covers this shape
-      // of error in v0.1 — skip defensively rather than crash.
+      // `terminators`). The line is dropped as before; AT1009 reports it.
+      diagnostics.push(Diagnostics.misplacedDirective(directive.name, "here", spanOf(line)));
       return single(undefined);
     default:
       diagnostics.push(Diagnostics.unknownDirective(directive.name, spanOf(line)));

@@ -355,6 +355,14 @@ Empty-string scene IDs are forbidden. A `@scene` directive with no id raises `AT
 
 ---
 
+## Misplaced structural directives
+
+`@elseif`, `@else`, `@when`, `@otherwise` and `@end` are valid only inside the construct they belong to: `@elseif`/`@else` in `@if`, `@when`/`@otherwise` in `@variant`, `@end` closing an open `@if`/`@variant`/`@choice`. Anywhere else (at scene level, inside the other construct, or as an extra `@end`) the line is invalid and reports `AT1009` (error) with the directive line as its span.
+
+Recovery is unchanged: the compiler drops the offending line, does not reinterpret it as prose, and does not synthesize a branch or construct. Surrounding content keeps the structure it had before the line was dropped, so for example an `@else` inside a `@variant` does not start a branch and the text after it stays in the preceding `@when` branch. `hasErrors` is `true`.
+
+---
+
 ## Conditions
 
 ```text
@@ -390,6 +398,8 @@ Fallback.
 The condition delimiter belongs to the target portion of the choice grammar.
 
 The word `if` inside display text is ordinary text.
+
+Inside a `@choice` body, ordinary non-bullet narrative lines are skipped without a diagnostic. A directive-shaped line (a line starting with `@name`) is never an item: it is skipped as well, but it is authored structure, so it is reported — `AT1009` for a known directive, `AT1001` for an unknown one. `@end` closes the choice and `@scene` ends it.
 
 ---
 
@@ -431,6 +441,8 @@ hasChangedSinceRead("alice-status")
 The exact API remains provisional.
 
 The stable-identity concept does not.
+
+A Variant body consists of `@when` branches and an optional final `@otherwise`. Content between the `@variant` line and the first branch marker belongs to no branch and is invalid: it reports `AT1105` (error). For recovery the content is still not placed in any branch (the Variant tree is unchanged), and the diagnostic span covers the ignored blocks.
 
 ---
 
@@ -856,10 +868,12 @@ The `DiagnosticCode` type currently contains exactly the codes below. Existing c
 | `AT1006` | error | A conditional branch appears after `@else`; `@else` must be last. | Validation |
 | `AT1007` | error | `@if` / `@variant` constructs are nested more than 64 levels deep; the over-deep construct is skipped. | Parser |
 | `AT1008` | error | Scene declaration has an empty id (`@scene` with no id). The diagnostic span is zero-width, immediately after `@scene`; the best-effort scene keeps `id` `""`. | Parser |
+| `AT1009` | error | A known structural directive is used where it is not valid: a stray `@elseif`/`@else`/`@when`/`@otherwise`/`@end` outside the construct it belongs to (including an extra `@end`), or any directive line inside a `@choice` body. The span is the directive line. The line is dropped as before. | Parser |
 | `AT1101` | error | Duplicate variant id. | Validation |
 | `AT1102` | error | Variant has no `@when` branch. | Validation |
 | `AT1103` | error | Reference to an unknown variant (for example a Reader Memory query argument). | Validation |
 | `AT1104` | error | A variant branch appears after `@otherwise`; `@otherwise` must be last. | Validation |
+| `AT1105` | error | Content between a `@variant` header and its first `@when`/`@otherwise` belongs to no branch and is ignored. The span covers the ignored blocks, from the start of the first to the end of the last. | Parser |
 | `AT1201` | error | Unsupported initial-state entry: either a value that is not a string, finite number, boolean, or null (arrays, nested maps, aliases, a non-map `state`, `.inf`, `.nan`), or an unsupported key (Section 12). The entry is excluded from the initial state. | Parser |
 | `AT1202` | error | Invalid frontmatter: a YAML syntax error (including duplicate keys), or a `title` / `entry` whose value is not a string (Section 12). | Parser |
 | `AT1301` | error | Malformed presentation directive. | Parser |
