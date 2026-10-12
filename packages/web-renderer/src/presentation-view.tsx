@@ -1,5 +1,5 @@
 import type { PresentationCommand } from "@aftertext/compiler";
-import type { ReactNode } from "react";
+import type { ReactNode, Ref } from "react";
 import { isTimedCommand } from "./timed-presentation.js";
 
 /**
@@ -43,6 +43,8 @@ export interface PresentationViewProps {
    * behavior regardless of this value.
    */
   readonly timedUnlocked: boolean;
+  /** Receives the Next/Continue button when one is rendered (focus policy, Section 19.18). */
+  readonly primaryRef?: Ref<HTMLButtonElement>;
 }
 
 /**
@@ -56,13 +58,13 @@ export interface PresentationViewProps {
  * the visual/acknowledgement never auto-consumes the suspension either
  * way.
  */
-export function PresentationView({ command, onAdvance, timedUnlocked }: PresentationViewProps): ReactNode {
+export function PresentationView({ command, onAdvance, timedUnlocked, primaryRef }: PresentationViewProps): ReactNode {
   if (isTimedCommand(command)) {
     return (
       <div>
         <p>{describe(command)}</p>
         {timedUnlocked ? (
-          <button type="button" onClick={onAdvance}>
+          <button ref={primaryRef} type="button" onClick={onAdvance}>
             Continue
           </button>
         ) : (
@@ -75,7 +77,7 @@ export function PresentationView({ command, onAdvance, timedUnlocked }: Presenta
   return (
     <div>
       <p>{describe(command)}</p>
-      <button type="button" onClick={onAdvance}>
+      <button ref={primaryRef} type="button" onClick={onAdvance}>
         Next
       </button>
     </div>
