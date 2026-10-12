@@ -1413,6 +1413,8 @@ An **execution-step limit exceeded** error (17.12) is a third, distinct case: ne
 
 Runtime execution errors are a deliberately narrow shape — a category (`kind`), a `message`, and an optional source `span` — and do not mirror the compiler's `Diagnostic` registry.
 
+`span` is present when the error arises from an authored source operation whose position is known, and absent otherwise; a span is never invented. An expression error carries the expression or call span. An invalid `@goto` target carries the `GotoNode`'s `targetSourceSpan`. An empty Choice carries the `ChoiceNode`'s `span`. Errors that come only from runtime state or caller input carry none: a `RuntimeState` navigation scene that does not exist, an invalid Choice selection (an offered item has no source position, and its index is a transient offer index), a Choice item whose target does not exist (selection operates on the suspension alone), the execution-step limit (a protection mechanism, not an authored-source fault), and `invalid-execution-block` (the malformed block's own fields are not trusted).
+
 **Runtime execution is progressive, not transactional.** If `advance()` successfully completes one or more automatic operations (e.g. a `@set`, a matched conditional/Variant branch selection) before a later operation in that same call fails, the already-completed operations remain reflected in the returned `RuntimeState`/cursor — the whole `advance()` call is **not** rolled back. Only the operation that actually failed leaves no effect of its own. For example, given
 
 ```text

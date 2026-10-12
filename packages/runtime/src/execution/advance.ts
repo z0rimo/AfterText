@@ -227,7 +227,7 @@ export function advance(
         const filtered = filterChoiceItems(block, context());
         if (!filtered.ok) return commit(frames, { type: "error", error: filtered.error });
         if (filtered.items.length === 0) {
-          return commit(frames, { type: "error", error: RuntimeErrors.emptyChoice() });
+          return commit(frames, { type: "error", error: RuntimeErrors.emptyChoice(block.span) });
         }
         // Cursor is intentionally left pointing at this ChoiceNode — resuming
         // past it only ever happens via selectChoice's shared navigateTo,
@@ -237,7 +237,7 @@ export function advance(
       }
 
       case "Goto": {
-        return navigateTo(document, { ...runtimeState, story, reader }, frames, block.target);
+        return navigateTo(document, { ...runtimeState, story, reader }, frames, block.target, block.targetSourceSpan);
       }
 
       default: {
