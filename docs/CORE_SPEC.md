@@ -332,6 +332,8 @@ A document without an explicit scene receives a deterministic synthetic `main` s
 
 Leading prose before an explicit scene is also preserved through the synthetic-main mechanism.
 
+A scene id is the non-empty, whitespace-trimmed text after `@scene`. It is an opaque authored string: it may contain internal spaces, Unicode and punctuation, and it has no lexical restriction beyond being non-empty. In particular it is **not** subject to the Choice target grammar (see Choices), so not every valid scene id can be written as an unquoted Choice target.
+
 Empty-string scene IDs are forbidden. A `@scene` directive with no id raises `AT1008`; the best-effort Scene node is still produced with `id` `""` (no id is invented).
 
 ---
@@ -394,6 +396,27 @@ Fallback.
 
 @end
 ```
+
+**Choice target grammar (current, intentional).** An unquoted Choice target matches `[A-Za-z][A-Za-z0-9_-]*`, optionally followed by separator whitespace, `if`, separator whitespace and a condition. This is narrower than the scene id namespace: `@scene` declares, and `@goto` and the Reader Memory builtins (`visited("…")`, Section 17) refer to, scene ids of any shape, but a Choice can name only scenes whose id fits the pattern above. For example:
+
+| Scene id | `@scene` / `@goto` / `visited()` | Unquoted Choice target |
+|---|---|---|
+| `room`, `a-b_c` | valid | valid |
+| `방`, `café` | valid | `AT1005` |
+| `my scene` | valid | `AT1005` |
+| `1abc`, `_x`, `a.b` | valid | `AT1005` |
+| `room if dark` | valid | always read as target `room` with condition `dark` (`AT1004` if there is no scene `room`) |
+| `a->b` | valid | the item is split at the last unescaped `->`, so the target is read as `b`; the escaped form `a\->b` is not an identifier (`AT1005`) |
+
+So `- Go -> 방` and `- Go -> my scene` are not valid Choice syntax and report `AT1005`, even though `@scene 방` / `@goto 방` and `@scene my scene` / `@goto my scene` are valid.
+
+**The `if` ambiguity.** After the arrow, the first separator-whitespace-delimited `if` always starts the condition. The entire id `room if dark` therefore cannot be written as an unquoted Choice target; no escape exists for it. This is the defined behavior of the Choice grammar, not a parser defect.
+
+**The `->` ambiguity.** A Choice line is split at its last unescaped `->` (Section 25.40), so an id containing `->` cannot be written unquoted either, escaped or not.
+
+These are limitations of the Choice target syntax, not restrictions on scene ids: scene ids and `@goto` are not narrowed to match it. A Choice cannot currently name such a scene directly; an author can point the Choice at an identifier-shaped scene that continues with `@goto`.
+
+*FUTURE — not part of the current language, not LOCKED, not implemented.* A quoted Choice target such as `- Go -> "my scene"`, `- Go -> "방"`, `- Go -> "room if dark"` or `- Go -> "a->b"` is a candidate additive extension for expressing the full scene id namespace in a Choice. Nothing about it is designed yet: its exact grammar, escaping, source spans, the Section 25.40 source-generation helpers and editor integration are all undecided. Authors and tools must not rely on it.
 
 The condition delimiter belongs to the target portion of the choice grammar.
 
@@ -3115,6 +3138,8 @@ isPresentationNamedArgumentValueBoundarySafe(value: string): boolean
 
 Both are deliberately conservative. A `true` result means only that the value cannot change token boundaries; it can still be invalid content (`"123"` as a choice target; `"bananas"` as a volume). No syntactically valid unconditional choice target contains separator whitespace, so the choice predicate never rejects a value that could have been valid.
 
+Scene ids are opaque strings wider than the Choice target grammar (Scene, Choices); `isChoiceTargetBoundarySafe` concerns only whether a value can change token boundaries in a Choice line, and does not make an arbitrary scene id expressible as a Choice target.
+
 **Parser behavior protected.**
 
 - A choice item is split at the last unescaped `->` on the line (`findLastUnescapedArrow`), so display text may contain `\->`. Items with no unescaped arrow, or whose tail does not match the target pattern, report `AT1005`.
@@ -3312,6 +3337,7 @@ Status: LOCKED
 
 * For a non-empty target, the span covers exactly the authored argument of the `@goto` line. It excludes the keyword, the separator whitespace (spaces or tabs) before the target, trailing whitespace, and the line terminator. Slicing the source with the span yields the authored target text.
 * `target` is the argument text with surrounding whitespace trimmed. It is not normalized: it is case-sensitive, it may contain internal spaces and Unicode, and quote characters are part of the text. Scene resolution (AT1004 for an unknown scene) is separate from the span.
+* This is deliberately wider than a Choice target, which is limited to `[A-Za-z][A-Za-z0-9_-]*` (see Choices); `@goto` semantics are not narrowed to match it.
 * An empty target (`@goto`, or `@goto` followed only by spaces or tabs) yields `target === ""`, an AT1004 diagnostic, and a zero-width `targetSourceSpan` positioned immediately after the keyword: column 6 of the `@goto` line, offset = line start offset + 5. Trailing whitespace after a bare `@goto` does not move it. The zero-width span is metadata only. A tool that inserts text there must supply its own separating whitespace.
 * A Goto nested in an `@if` branch or a Variant branch has its own span with offsets relative to the whole source.
 * CRLF line endings do not shift the span.
