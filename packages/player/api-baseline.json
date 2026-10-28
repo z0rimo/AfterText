@@ -70,7 +70,7 @@
     "PlayerState": {
       "kind": "interface",
       "members": [
-        "readonly property current: ChoiceResult | CompletedResult | ContentResult | ErrorResult | NavigationResult | PresentationResult",
+        "readonly property current: ChoiceResult | CompletedResult | ContentResult | ErrorResult | NavigationResult | PresentationResult | null",
         "readonly property cursor: ExecutionCursor",
         "readonly property runtimeState: RuntimeState"
       ]

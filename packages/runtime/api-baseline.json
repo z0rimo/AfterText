@@ -180,13 +180,14 @@
     "StoryState": {
       "kind": "type",
       "members": [
-        "readonly index [string]: boolean | number | string"
+        "readonly index [string]: boolean | null | number | string"
       ]
     },
     "StoryValue": {
       "kind": "type",
       "members": [
         "union false",
+        "union null",
         "union number",
         "union string",
         "union true"
@@ -222,7 +223,7 @@
     "getLastSeenVariantBranch": {
       "kind": "function",
       "members": [
-        "signature (ReaderState, string) => string"
+        "signature (ReaderState, string) => null | string"
       ]
     },
     "getSceneVisitCount": {

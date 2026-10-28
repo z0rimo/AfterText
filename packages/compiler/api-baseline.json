@@ -67,7 +67,7 @@
       "kind": "interface",
       "members": [
         "readonly property action: \"zoom\"",
-        "readonly property durationMs: number",
+        "readonly property durationMs: number | undefined",
         "readonly property to: number",
         "readonly property type: \"Camera\""
       ]
@@ -75,7 +75,7 @@
     "ChoiceItem": {
       "kind": "interface",
       "members": [
-        "readonly property condition: BinaryExpression | CallExpression | IdentifierExpression | LiteralExpression | UnaryExpression",
+        "readonly property condition: BinaryExpression | CallExpression | IdentifierExpression | LiteralExpression | UnaryExpression | undefined",
         "readonly property conditionSourceSpan?: SourceSpan",
         "readonly property span: SourceSpan",
         "readonly property target: string",
@@ -102,7 +102,7 @@
       "kind": "interface",
       "members": [
         "readonly property blocks: readonly StoryBlock[]",
-        "readonly property condition: BinaryExpression | CallExpression | IdentifierExpression | LiteralExpression | UnaryExpression",
+        "readonly property condition: BinaryExpression | CallExpression | IdentifierExpression | LiteralExpression | UnaryExpression | undefined",
         "readonly property conditionSourceSpan?: SourceSpan",
         "readonly property followingLineEnding?: \"\" | \"\\n\" | \"\\r\\n\"",
         "readonly property kind: \"else\" | \"elseif\" | \"if\"",
@@ -263,13 +263,14 @@
       "members": [
         "readonly property span: SourceSpan",
         "readonly property type: \"Literal\"",
-        "readonly property value: boolean | number | string"
+        "readonly property value: boolean | null | number | string"
       ]
     },
     "LiteralValue": {
       "kind": "type",
       "members": [
         "union false",
+        "union null",
         "union number",
         "union string",
         "union true"
@@ -280,7 +281,7 @@
       "members": [
         "readonly property track: string",
         "readonly property type: \"Music\"",
-        "readonly property volume: number"
+        "readonly property volume: number | undefined"
       ]
     },
     "ParagraphNode": {
@@ -370,6 +371,7 @@
       "kind": "type",
       "members": [
         "union false",
+        "union null",
         "union number",
         "union string",
         "union true"
@@ -401,15 +403,15 @@
     "StoryMetadata": {
       "kind": "interface",
       "members": [
-        "readonly property entry: string",
-        "readonly property span: SourceSpan",
-        "readonly property title: string"
+        "readonly property entry: string | undefined",
+        "readonly property span: SourceSpan | undefined",
+        "readonly property title: string | undefined"
       ]
     },
     "StoryStateDefinition": {
       "kind": "type",
       "members": [
-        "readonly index [string]: boolean | number | string"
+        "readonly index [string]: boolean | null | number | string"
       ]
     },
     "StrongInline": {
@@ -449,7 +451,7 @@
       "members": [
         "readonly property blocks: readonly StoryBlock[]",
         "readonly property branchId: string",
-        "readonly property condition: BinaryExpression | CallExpression | IdentifierExpression | LiteralExpression | UnaryExpression",
+        "readonly property condition: BinaryExpression | CallExpression | IdentifierExpression | LiteralExpression | UnaryExpression | undefined",
         "readonly property conditionSourceSpan?: SourceSpan",
         "readonly property followingLineEnding?: \"\" | \"\\n\" | \"\\r\\n\"",
         "readonly property kind: \"otherwise\" | \"when\"",

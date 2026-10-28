@@ -280,6 +280,77 @@ test("fixture: private/protected class members are not part of the baseline", as
 });
 
 // ---------------------------------------------------------------------------
+// 3b. Nullability: `T | null` / `T | undefined` must survive extraction.
+//     The declarations are read with strictNullChecks (the packages are built
+//     with `strict: true`); without it the checker collapses them to `T`.
+// ---------------------------------------------------------------------------
+
+test("fixture: nullable union keeps `null` as a member", async () => {
+  const { exports } = await fixtureSurface("export type Nullable = string | null;\nexport {};\n");
+  assert.deepEqual(exports.Nullable.members, ["union null", "union string"]);
+});
+
+test("fixture: required `| undefined` is kept, optional `?` is not duplicated", async () => {
+  const { exports } = await fixtureSurface(`
+export interface RequiredMaybe { readonly value: string | undefined }
+export interface OptionalMaybe { readonly value?: string }
+export interface OptionalExplicit { readonly value?: string | undefined }
+export {};
+`);
+  assert.deepEqual(exports.RequiredMaybe.members, ["readonly property value: string | undefined"]);
+  assert.deepEqual(exports.OptionalMaybe.members, ["readonly property value?: string"]);
+  assert.deepEqual(exports.OptionalExplicit.members, ["readonly property value?: string"]);
+});
+
+test("fixture: nullable return type, parameter and index value keep `null`", async () => {
+  const { exports } = await fixtureSurface(`
+export declare function maybe(): string | null;
+export declare function take(x: number | null): void;
+export type Bag = Readonly<Record<string, number | null>>;
+export {};
+`);
+  assert.deepEqual(exports.maybe.members, ["signature () => null | string"]);
+  assert.deepEqual(exports.take.members, ["signature (null | number) => void"]);
+  assert.deepEqual(exports.Bag.members, ["readonly index [string]: null | number"]);
+});
+
+test("fixture mutation: dropping `| null` / `| undefined` is detected", async () => {
+  const nullable = "export type Nullable = string | number | null;\nexport interface Maybe { readonly value: string | undefined }\nexport {};\n";
+  const before = await fixtureSurface(nullable);
+  const nullDropped = diffSurfaces(toBaseline(before), await fixtureSurface(nullable.replace("string | number | null", "string | number")));
+  assert.deepEqual(nullDropped.changed.map((c) => c.name), ["Nullable"]);
+  assert.deepEqual(nullDropped.changed[0].removedMembers, ["union null"]);
+  const undefinedDropped = diffSurfaces(toBaseline(before), await fixtureSurface(nullable.replace("string | undefined", "string")));
+  assert.deepEqual(undefinedDropped.changed.map((c) => c.name), ["Maybe"]);
+  assert.deepEqual(undefinedDropped.changed[0].removedMembers, ["readonly property value: string | undefined"]);
+});
+
+test("fixture: a non-exported union alias used as `Alias | undefined` stays a tracked referenced type", async () => {
+  const { referencedTypes } = await fixtureSurface(`
+type Origin = { kind: "a" } | { kind: "b" };
+export interface Frame { readonly origin?: Origin; readonly other: Origin | null }
+export {};
+`);
+  assert.deepEqual(Object.keys(referencedTypes), ["Origin"]);
+});
+
+test("real packages: consumer-visible null/undefined members are in the baselines", async () => {
+  const has = (entry, line) => assert.ok(entry.members.includes(line), `${line}\n${entry.members.join("\n")}`);
+  const compiler = toBaseline(await extractSurface("compiler")).exports;
+  has(compiler.StateValue, "union null");
+  has(compiler.StoryMetadata, "readonly property title: string | undefined");
+  has(compiler.StoryStateDefinition, "readonly index [string]: boolean | null | number | string");
+  const runtime = toBaseline(await extractSurface("runtime")).exports;
+  has(runtime.StoryValue, "union null");
+  has(runtime.StoryState, "readonly index [string]: boolean | null | number | string");
+  has(runtime.getLastSeenVariantBranch, "signature (ReaderState, string) => null | string");
+  const player = toBaseline(await extractSurface("player")).exports;
+  assert.match(player.PlayerState.members.find((line) => line.includes("property current")), / \| null$/);
+  const renderer = toBaseline(await extractSurface("web-renderer")).exports;
+  assert.match(renderer.AfterTextPlayerProps.members.find((line) => line.includes("resolveAsset")), /=> null \| string\)$/);
+});
+
+// ---------------------------------------------------------------------------
 // 4. Pure diff behaviour.
 // ---------------------------------------------------------------------------
 
