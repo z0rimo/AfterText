@@ -1,7 +1,7 @@
 import type { StoryDocument } from "@aftertext/compiler";
 import { advancePlayer, createPlayer, selectPlayerChoice } from "@aftertext/player";
 import type { PlayerState } from "@aftertext/player";
-import { useEffect, useRef, useState, type ReactElement, type ReactNode } from "react";
+import { useEffect, useRef, useState, type ReactElement, type ReactNode, type Ref } from "react";
 import { ChoiceView } from "./choice-view.js";
 import { CompletedView } from "./completed-view.js";
 import { ContentView } from "./content-view.js";
@@ -120,6 +120,22 @@ export function AfterTextPlayer({
   // updater, or a post-render effect. Music/Sfx never mutate PlayerState/
   // RuntimeState and never trigger a further Player transition (Section
   // 23.29, 23.31).
+  // Keyboard-focus continuity (Section 19.18). Every narrative result
+  // replaces the activated button, which would strand focus on <body>. A
+  // user-initiated transition (advance/select/restart — never document
+  // replacement, a timer, or presentation-state change) records one pending
+  // request; the effect below then moves focus to the new result's primary
+  // control. Ephemeral renderer-local refs, not part of any state.
+  const rootRef = useRef<HTMLDivElement | null>(null);
+  const primaryRef = useRef<HTMLButtonElement | null>(null);
+  const pendingFocusRef = useRef(false);
+
+  // A new document is a new session, not a narrative step: drop any pending
+  // request rather than moving focus into it.
+  useEffect(() => {
+    pendingFocusRef.current = false;
+  }, [storyDocument]);
+
   const applyAudioSideEffect = (player: PlayerState): void => {
     if (player.current?.type !== "presentation") return;
     const { command } = player.current;
@@ -138,12 +154,14 @@ export function AfterTextPlayer({
     const player = advancePlayer(storyDocument, session.player);
     applyAudioSideEffect(player);
     const presentation = acceptPlayerState(session.presentation, player);
+    pendingFocusRef.current = true;
     setSession({ ...session, player, presentation });
   };
   const select = (index: number): void => {
     const player = selectPlayerChoice(storyDocument, session.player, index);
     applyAudioSideEffect(player);
     const presentation = acceptPlayerState(session.presentation, player);
+    pendingFocusRef.current = true;
     setSession({ ...session, player, presentation });
   };
   const restart = (): void => {
@@ -152,6 +170,7 @@ export function AfterTextPlayer({
     // authored command triggers playback normally through advance/select.
     stopMusicElement(musicElementRef.current);
     stopAndClearSfx(activeSfxRef.current);
+    pendingFocusRef.current = true;
     setSession(createSession(storyDocument));
   };
 
@@ -181,16 +200,33 @@ export function AfterTextPlayer({
   }, [currentTimed]);
 
   const timedUnlocked = isTimedPresentationUnlocked(currentTimed, session.timedGate);
+
+  // Runs only when the narrative result changes or a timed gate opens (a
+  // locked Pause/Camera has no control yet, so the request stays pending
+  // until Continue appears). Focus is moved only if it is currently
+  // stranded (on <body>) or still inside this renderer, so it never steals
+  // focus the user has deliberately moved elsewhere.
+  const currentResult = session.player.current;
+  useEffect(() => {
+    if (!pendingFocusRef.current) return;
+    const target = primaryRef.current;
+    if (target === null) return;
+    pendingFocusRef.current = false;
+    const active = target.ownerDocument.activeElement;
+    if (active === null || active === target.ownerDocument.body || rootRef.current?.contains(active)) {
+      target.focus();
+    }
+  }, [currentResult, timedUnlocked]);
   const cameraTransitionMs = cameraAuthoredTransitionMs(session.player);
 
   return (
-    <div aria-live="polite">
+    <div ref={rootRef} aria-live="polite">
       <PresentationSurface
         presentation={session.presentation}
         resolveAsset={resolveAsset}
         cameraTransitionMs={cameraTransitionMs}
       >
-        {renderCurrent(session.player, timedUnlocked, advance, select, restart)}
+        {renderCurrent(session.player, timedUnlocked, advance, select, restart, primaryRef)}
       </PresentationSurface>
     </div>
   );
@@ -201,11 +237,12 @@ function renderCurrent(
   timedUnlocked: boolean,
   advance: () => void,
   select: (index: number) => void,
-  restart: () => void
+  restart: () => void,
+  primaryRef: Ref<HTMLButtonElement>
 ): ReactNode {
   if (player.current === null) {
     return (
-      <button type="button" onClick={advance}>
+      <button ref={primaryRef} type="button" onClick={advance}>
         Start
       </button>
     );
@@ -216,32 +253,37 @@ function renderCurrent(
       return (
         <div>
           <ContentView block={player.current.block} />
-          <button type="button" onClick={advance}>
+          <button ref={primaryRef} type="button" onClick={advance}>
             Next
           </button>
         </div>
       );
 
     case "presentation":
-      return <PresentationView command={player.current.command} onAdvance={advance} timedUnlocked={timedUnlocked} />;
+      return <PresentationView
+          command={player.current.command}
+          onAdvance={advance}
+          timedUnlocked={timedUnlocked}
+          primaryRef={primaryRef}
+        />;
 
     case "choice":
-      return <ChoiceView items={player.current.items} onSelect={select} />;
+      return <ChoiceView items={player.current.items} onSelect={select} primaryRef={primaryRef} />;
 
     case "navigation":
       return (
         <div>
           <p>Continuing&hellip;</p>
-          <button type="button" onClick={advance}>
+          <button ref={primaryRef} type="button" onClick={advance}>
             Continue
           </button>
         </div>
       );
 
     case "completed":
-      return <CompletedView onRestart={restart} />;
+      return <CompletedView onRestart={restart} primaryRef={primaryRef} />;
 
     case "error":
-      return <ErrorView error={player.current.error} onRestart={restart} />;
+      return <ErrorView error={player.current.error} onRestart={restart} primaryRef={primaryRef} />;
   }
 }
