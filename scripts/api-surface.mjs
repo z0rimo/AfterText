@@ -146,6 +146,9 @@ class Describer {
     }
     if (type.isUnionOrIntersection()) {
       for (const member of type.types) this.track(member);
+      // `Alias | null` / `Alias | undefined` is flattened by the checker, which
+      // drops the alias; tracking the non-nullable part restores it.
+      if (type.isUnion()) this.track(this.checker.getNonNullableType(type));
       return;
     }
     if (type.flags & ts.TypeFlags.EnumLike) {
@@ -308,7 +311,11 @@ export async function extractSurface(name, root = repoRoot) {
     jsx: ts.JsxEmit.ReactJSX,
     skipLibCheck: true,
     noEmit: true,
-    types: []
+    types: [],
+    // Without this the checker collapses `T | null` / `T | undefined` to `T`,
+    // hiding consumer-visible nullability from the baseline. The packages are
+    // built with `strict: true`, so the declarations must be read the same way.
+    strictNullChecks: true
   });
   const checker = program.getTypeChecker();
   const sourceFile = program.getSourceFile(declarationFile);

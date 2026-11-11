@@ -17,7 +17,7 @@
       "kind": "interface",
       "members": [
         "readonly property document: StoryDocument",
-        "readonly property resolveAsset?: (string, \"background\" | \"layer\" | \"music\" | \"sfx\") => string"
+        "readonly property resolveAsset?: ((string, \"background\" | \"layer\" | \"music\" | \"sfx\") => null | string)"
       ]
     }
   },
