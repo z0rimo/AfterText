@@ -28,15 +28,21 @@ import {
 export interface AfterTextPlayerProps {
   readonly document: StoryDocument;
   /**
-   * Resolves an opaque `@background`/`@layer`/`@music`/`@sfx` story
-   * reference to a browser-loadable URL (docs/CORE_SPEC.md Section
-   * 20.11, 23.20). Synchronous and deterministic — a resource-resolution
-   * boundary, not an event callback. Defaults to identity (the reference
-   * is used as-is), so a story already using real browser paths/URLs
-   * works unconfigured. `kind` widened to include `"music"`/`"sfx"` as of
-   * Section 23 — a real, additive type change (Section 23.20).
+   * Resolves an opaque `@background`/`@layer`/`@music`/`@sfx`/`@sprite`
+   * story reference to a browser-loadable URL (docs/CORE_SPEC.md Section
+   * 20.11, 23.20, 31.13). Synchronous and deterministic — a
+   * resource-resolution boundary, not an event callback. Defaults to
+   * identity (the reference is used as-is), so a story already using real
+   * browser paths/URLs works unconfigured. `kind` widened to include
+   * `"music"`/`"sfx"` as of Section 23, and `"sprite"` as of Section 31 —
+   * each a real, additive type change (Section 23.20, 31.13): a consumer
+   * with a separately declared, explicitly narrow `kind` parameter type,
+   * or one doing exhaustive `kind` switching, may require an update.
    */
-  readonly resolveAsset?: (ref: string, kind: "background" | "layer" | "music" | "sfx") => string | null;
+  readonly resolveAsset?: (
+    ref: string,
+    kind: "background" | "layer" | "music" | "sfx" | "sprite"
+  ) => string | null;
 }
 
 interface RendererSession {

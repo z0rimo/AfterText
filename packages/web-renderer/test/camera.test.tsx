@@ -77,6 +77,23 @@ describe("Camera: transform application", () => {
     expect(surface.contains(paragraph)).toBe(false);
   });
 
+  it("Sprite visuals are contained by CameraSurface, so Camera zoom applies to them (docs/CORE_SPEC.md Section 31.14), while narrative UI remains outside it", () => {
+    const { container } = render(
+      <AfterTextPlayer
+        document={compileDoc("@scene s\n@camera zoom to=2\n@sprite show id=alice image=a.png position=left\nHello.\n")}
+      />
+    );
+    start();
+    fireEvent.click(screen.getByRole("button", { name: "Next" })); // sprite show
+    fireEvent.click(screen.getByRole("button", { name: "Next" })); // -> content
+
+    const surface = cameraSurface(container);
+    const spriteImage = container.querySelector("img");
+    if (spriteImage === null) throw new Error("Sprite image not found");
+    expect(surface.contains(spriteImage)).toBe(true);
+    expect(surface.contains(screen.getByText("Hello."))).toBe(false);
+  });
+
   it("CameraSurface remains the same DOM node across ordinary result changes (never remounted)", () => {
     const { container } = render(
       <AfterTextPlayer document={compileDoc("@scene s\nFirst.\n\nSecond.\n")} />
