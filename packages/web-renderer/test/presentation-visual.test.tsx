@@ -224,7 +224,7 @@ describe("resolveAsset", () => {
   it("uses a custom resolver, receiving the correct kind", async () => {
     const user = userEvent.setup();
     const seen: Array<{ ref: string; kind: string }> = [];
-    const resolveAsset = (ref: string, kind: "background" | "layer" | "music" | "sfx"): string => {
+    const resolveAsset = (ref: string, kind: "background" | "layer" | "music" | "sfx" | "sprite"): string => {
       seen.push({ ref, kind });
       return `/assets/${ref}`;
     };
@@ -295,6 +295,243 @@ describe("Asset load failure", () => {
     // The new asset gets a fresh chance to load — not permanently hidden
     // by the previous asset's failure.
     expect(image(container)).toHaveAttribute("src", "room-b.jpg");
+  });
+});
+
+describe("Sprite rendering", () => {
+  it("one shown Sprite renders exactly one decorative image", async () => {
+    const user = userEvent.setup();
+    const document = compileDoc("@scene s\n@sprite show id=alice image=a.png position=left\n");
+    const { container } = render(<AfterTextPlayer document={document} />);
+    await start(user);
+
+    const img = image(container);
+    expect(img).toHaveAttribute("src", "a.png");
+    expect(img).toHaveAttribute("alt", "");
+  });
+
+  it("two shown Sprites render simultaneously, in PresentationState.sprites' own back-to-front DOM order", async () => {
+    const user = userEvent.setup();
+    const source = [
+      "@scene s",
+      "@sprite show id=alice image=a.png position=left",
+      "@sprite show id=bob image=b.png position=right"
+    ].join("\n");
+    const { container } = render(<AfterTextPlayer document={compileDoc(source)} />);
+    await start(user); // alice's presentation
+    await user.click(screen.getByRole("button", { name: "Next" })); // bob's presentation; state already accumulates both
+
+    // alice (shown first, back-most) is the first DOM child; bob (front-most) is last.
+    expect(images(container).map((img) => img.getAttribute("src"))).toEqual(["a.png", "b.png"]);
+  });
+
+  it.each([
+    ["left", { left: "0px", right: "", hasCenterTransform: false }],
+    ["center", { left: "50%", right: "", hasCenterTransform: true }],
+    ["right", { left: "", right: "0px", hasCenterTransform: false }]
+  ] as const)("position=%s is implemented with the expected structural anchor", async (position, expected) => {
+    const user = userEvent.setup();
+    const document = compileDoc(`@scene s\n@sprite show id=alice image=a.png position=${position}\n`);
+    const { container } = render(<AfterTextPlayer document={document} />);
+    await start(user);
+
+    const wrapper = image(container).parentElement as HTMLElement;
+    expect(wrapper.style.left).toBe(expected.left);
+    expect(wrapper.style.right).toBe(expected.right);
+    expect(wrapper.style.transform.includes("translateX(-50%)")).toBe(expected.hasCenterTransform);
+  });
+
+  it("showing an already-visible id replaces its image while preserving stacking position", async () => {
+    const user = userEvent.setup();
+    const source = [
+      "@scene s",
+      "@sprite show id=alice image=a.png position=left",
+      "@sprite show id=bob image=b.png position=right",
+      "@sprite show id=alice image=a2.png position=left"
+    ].join("\n");
+    const { container } = render(<AfterTextPlayer document={compileDoc(source)} />);
+    await start(user);
+    await user.click(screen.getByRole("button", { name: "Next" }));
+    await user.click(screen.getByRole("button", { name: "Next" }));
+
+    expect(images(container).map((img) => img.getAttribute("src"))).toEqual(["a2.png", "b.png"]);
+  });
+
+  it("showing an already-visible id replaces its position without changing its identity or order", async () => {
+    const user = userEvent.setup();
+    const source = [
+      "@scene s",
+      "@sprite show id=alice image=a.png position=left",
+      "@sprite show id=bob image=b.png position=right",
+      "@sprite show id=alice image=a.png position=center"
+    ].join("\n");
+    const { container } = render(<AfterTextPlayer document={compileDoc(source)} />);
+    await start(user);
+    await user.click(screen.getByRole("button", { name: "Next" }));
+    await user.click(screen.getByRole("button", { name: "Next" }));
+
+    const srcs = images(container).map((img) => img.getAttribute("src"));
+    expect(srcs).toEqual(["a.png", "b.png"]);
+
+    const aliceWrapper = images(container)[0]!.parentElement as HTMLElement;
+    expect(aliceWrapper.style.left).toBe("50%");
+    expect(aliceWrapper.style.transform.includes("translateX(-50%)")).toBe(true);
+  });
+
+  it("hiding a Sprite removes its visual entirely", async () => {
+    const user = userEvent.setup();
+    const source = ["@scene s", "@sprite show id=alice image=a.png position=left", "@sprite hide id=alice"].join(
+      "\n"
+    );
+    const { container } = render(<AfterTextPlayer document={compileDoc(source)} />);
+    await start(user);
+    await user.click(screen.getByRole("button", { name: "Next" }));
+
+    expect(images(container)).toHaveLength(0);
+  });
+
+  it("hide then re-show places the Sprite back at the front, not its old position", async () => {
+    const user = userEvent.setup();
+    const source = [
+      "@scene s",
+      "@sprite show id=alice image=a.png position=left",
+      "@sprite show id=bob image=b.png position=right",
+      "@sprite hide id=alice",
+      "@sprite show id=alice image=a2.png position=center"
+    ].join("\n");
+    const { container } = render(<AfterTextPlayer document={compileDoc(source)} />);
+    await start(user);
+    await user.click(screen.getByRole("button", { name: "Next" }));
+    await user.click(screen.getByRole("button", { name: "Next" }));
+    await user.click(screen.getByRole("button", { name: "Next" }));
+
+    expect(images(container).map((img) => img.getAttribute("src"))).toEqual(["b.png", "a2.png"]);
+  });
+
+  it("multiple Sprites at the same named position all render, overlap resolved only by Sprite order", async () => {
+    const user = userEvent.setup();
+    const source = [
+      "@scene s",
+      "@sprite show id=alice image=a.png position=center",
+      "@sprite show id=bob image=b.png position=center"
+    ].join("\n");
+    const { container } = render(<AfterTextPlayer document={compileDoc(source)} />);
+    await start(user);
+    await user.click(screen.getByRole("button", { name: "Next" }));
+
+    expect(images(container).map((img) => img.getAttribute("src"))).toEqual(["a.png", "b.png"]);
+  });
+
+  it("the Sprite container is marked pointer-events: none, never intercepting narrative controls", async () => {
+    const user = userEvent.setup();
+    const document = compileDoc("@scene s\n@sprite show id=alice image=a.png position=left\n");
+    const { container } = render(<AfterTextPlayer document={document} />);
+    await start(user);
+
+    const spriteContainer = image(container).parentElement!.parentElement as HTMLElement;
+    expect(spriteContainer.style.pointerEvents).toBe("none");
+    expect(screen.getByRole("button", { name: "Next" })).toBeInTheDocument();
+  });
+
+  describe("resolveAsset", () => {
+    it("is invoked with kind \"sprite\" for a Sprite's authored image", async () => {
+      const user = userEvent.setup();
+      const seen: Array<{ ref: string; kind: string }> = [];
+      const resolveAsset = (ref: string, kind: "background" | "layer" | "music" | "sfx" | "sprite"): string => {
+        seen.push({ ref, kind });
+        return `/assets/${ref}`;
+      };
+      const document = compileDoc("@scene s\n@sprite show id=alice image=a.png position=left\n");
+      const { container } = render(<AfterTextPlayer document={document} resolveAsset={resolveAsset} />);
+      await start(user);
+
+      expect(image(container)).toHaveAttribute("src", "/assets/a.png");
+      expect(seen).toContainEqual({ ref: "a.png", kind: "sprite" });
+    });
+
+    it("the new public resolveAsset contract accepts one resolver handling background/layer/music/sfx/sprite together", async () => {
+      const user = userEvent.setup();
+      const seenKinds = new Set<string>();
+      const resolveAsset = (ref: string, kind: "background" | "layer" | "music" | "sfx" | "sprite"): string => {
+        seenKinds.add(kind);
+        return ref;
+      };
+      const source = [
+        "@scene s",
+        "@background bg.jpg",
+        "@layer l.png",
+        "@music m.mp3",
+        "@sfx s.wav",
+        "@sprite show id=alice image=a.png position=left"
+      ].join("\n");
+      const { container } = render(<AfterTextPlayer document={compileDoc(source)} resolveAsset={resolveAsset} />);
+      await start(user);
+      await user.click(screen.getByRole("button", { name: "Next" }));
+      await user.click(screen.getByRole("button", { name: "Next" }));
+      await user.click(screen.getByRole("button", { name: "Next" }));
+      await user.click(screen.getByRole("button", { name: "Next" }));
+
+      expect(seenKinds).toEqual(new Set(["background", "layer", "music", "sfx", "sprite"]));
+      expect(images(container).length).toBeGreaterThan(0);
+    });
+
+    it("a resolver returning null shows a non-fatal fallback, not a broken image", async () => {
+      const user = userEvent.setup();
+      const document = compileDoc("@scene s\n@sprite show id=alice image=a.png position=left\n");
+      const { container } = render(<AfterTextPlayer document={document} resolveAsset={() => null} />);
+      await start(user);
+
+      expect(images(container)).toHaveLength(0);
+      expect(screen.getByText(/unavailable: a\.png/)).toBeInTheDocument();
+    });
+
+    it("an unsafe resolved URL never becomes an image source", async () => {
+      const user = userEvent.setup();
+      const document = compileDoc("@scene s\n@sprite show id=alice image=a.png position=left\n");
+      const { container } = render(
+        <AfterTextPlayer document={document} resolveAsset={() => "javascript:alert(1)"} />
+      );
+      await start(user);
+
+      expect(images(container)).toHaveLength(0);
+      expect(screen.getByText(/unavailable: a\.png/)).toBeInTheDocument();
+    });
+  });
+
+  describe("Asset load failure", () => {
+    it("a failed Sprite image load renders the fallback and never produces a RuntimeExecutionError", async () => {
+      const user = userEvent.setup();
+      const document = compileDoc("@scene s\n@sprite show id=alice image=a.png position=left\n");
+      const { container } = render(<AfterTextPlayer document={document} />);
+      await start(user);
+
+      fireEvent.error(image(container));
+
+      expect(images(container)).toHaveLength(0);
+      expect(screen.getByText(/unavailable: a\.png/)).toBeInTheDocument();
+      expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+    });
+
+    it("replacing the same Sprite id with a new image does not inherit the previous failure state", async () => {
+      const user = userEvent.setup();
+      const source = [
+        "@scene s",
+        "@sprite show id=alice image=a.png position=left",
+        "@sprite show id=alice image=a2.png position=left"
+      ].join("\n");
+      const { container } = render(<AfterTextPlayer document={compileDoc(source)} />);
+      await start(user);
+
+      fireEvent.error(image(container));
+      expect(images(container)).toHaveLength(0);
+
+      await user.click(screen.getByRole("button", { name: "Next" })); // second @sprite show, same id, new image
+
+      // The new image gets a fresh chance to load — not permanently hidden
+      // by the previous image's failure, because the inner image/failure
+      // component is keyed by the resolved asset, not by the Sprite's id.
+      expect(image(container)).toHaveAttribute("src", "a2.png");
+    });
   });
 });
 
