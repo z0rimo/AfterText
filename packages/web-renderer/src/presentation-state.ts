@@ -1,4 +1,4 @@
-import type { PresentationCommand } from "@aftertext/compiler";
+import type { PresentationCommand, SpritePosition } from "@aftertext/compiler";
 import type { PlayerState } from "@aftertext/player";
 
 /**
@@ -16,33 +16,54 @@ export interface MusicPresentationState {
 }
 
 /**
+ * One visible sprite's complete accumulated state (docs/CORE_SPEC.md
+ * Section 31.5): the raw author-provided `image` reference verbatim
+ * (never a resolved browser URL — the same ownership split as
+ * Background/Layer/Music, Section 20.13/31.12) and the last authored
+ * `position`. Carries no rendering concern (no `visible`/`zIndex`/
+ * `resolvedUrl`/`failed`/`transition` field) — those belong to a later
+ * Renderer slice that owns DOM/asset resolution, not this state model.
+ */
+export interface SpriteState {
+  readonly id: string;
+  readonly image: string;
+  readonly position: SpritePosition;
+}
+
+/**
  * Renderer-only persistent visual/audio-semantic state (docs/CORE_SPEC.md
  * Section 20.5, 22.6, 23.5). Stores the raw author-provided `image`/`track`
  * references verbatim — never a resolved browser URL (Section 20.8) — so a
  * host can swap `resolveAsset` without replaying narrative execution.
  * `cameraZoom` is the accepted persistent absolute zoom scale (Section
  * 22.3/22.6); `music` is the accepted persistent semantic Music state
- * (Section 23.5) or `null` when no Music has been accepted yet. None of
- * these fields ever hold an animation handle, timer ID, browser media
- * object, or other ephemeral bookkeeping (Section 22.9, 23.30) — those
- * live in the separate, ephemeral `TimedPresentationGate`
- * (`timed-presentation.ts`) or audio ownership (`audio-playback.ts`).
- * Lives entirely inside `@aftertext/web-renderer`; never added to
- * `RuntimeState`/`StoryState`/`ReaderState`/`NavigationState`/`PlayerState`/
- * `ExecutionCursor`.
+ * (Section 23.5) or `null` when no Music has been accepted yet. `sprites`
+ * is the accepted persistent Sprite Stage state (Section 31.5): an ordered,
+ * unique-by-`id` collection, index 0 the back-most sprite and the last
+ * index the front-most — a plain `readonly SpriteState[]`, never a
+ * `Record`/object-keyed representation (Section 31.5 explicitly excludes
+ * relying on object-key enumeration order for stacking). None of these
+ * fields ever hold an animation handle, timer ID, browser media object, or
+ * other ephemeral bookkeeping (Section 22.9, 23.30) — those live in the
+ * separate, ephemeral `TimedPresentationGate` (`timed-presentation.ts`) or
+ * audio ownership (`audio-playback.ts`). Lives entirely inside
+ * `@aftertext/web-renderer`; never added to `RuntimeState`/`StoryState`/
+ * `ReaderState`/`NavigationState`/`PlayerState`/`ExecutionCursor`.
  */
 export interface PresentationState {
   readonly background: string | null;
   readonly layer: string | null;
   readonly cameraZoom: number;
   readonly music: MusicPresentationState | null;
+  readonly sprites: readonly SpriteState[];
 }
 
 export const INITIAL_PRESENTATION_STATE: PresentationState = {
   background: null,
   layer: null,
   cameraZoom: 1,
-  music: null
+  music: null,
+  sprites: []
 };
 
 /**
@@ -66,14 +87,19 @@ function isValidCameraZoom(to: number): boolean {
  * event, never suppressed/deduplicated by value equality (Section 23.8).
  * `Sfx`/`Pause` leave `PresentationState` unchanged (returns the same
  * reference) — Sfx has no persistent semantic state by design (Section
- * 23.13). `ShowSprite`/`HideSprite` likewise leave `PresentationState`
- * unchanged for now — Sprite Stage's own accumulated visual state (docs/
- * CORE_SPEC.md Section 31.5–31.9) is implemented in a later Renderer slice;
- * this is the same inert-acknowledgement staging already locked for
- * Camera/Music/Sfx in earlier section eras (Section 19.13, 20.20) before
- * each received its own design pass, never a claim that Sprite's locked
- * semantics are renderer no-ops. Exhaustive over `PresentationCommand` — no
- * permissive `default`.
+ * 23.13). `ShowSprite` always allocates a fresh `sprites` array (Section
+ * 31.3/31.6) — appending when `id` is absent (it becomes the new
+ * front-most sprite, Section 31.9), or replacing that sprite's complete
+ * state at its existing array index when `id` is already present (never
+ * reordering it) — even when the new `image`/`position` are identical to
+ * the sprite's current values: a `ShowSpriteCommand` is always a complete,
+ * independent observable event, exactly the same never-suppressed-by-
+ * value-equality rule already locked for Music (Section 23.8). `HideSprite`
+ * removes the matching sprite when present, preserving the relative order
+ * of the rest (Section 31.7); when no sprite matches, it is a true
+ * semantic no-op and returns the same `PresentationState` reference,
+ * exactly like `Sfx`/`Pause`/an invalid Camera zoom above. Exhaustive over
+ * `PresentationCommand` — no permissive `default`.
  */
 export function applyPresentation(state: PresentationState, command: PresentationCommand): PresentationState {
   switch (command.type) {
@@ -87,9 +113,21 @@ export function applyPresentation(state: PresentationState, command: Presentatio
       return { ...state, music: { track: command.track, volume: command.volume } };
     case "Sfx":
     case "Pause":
-    case "ShowSprite":
-    case "HideSprite":
       return state;
+    case "ShowSprite": {
+      const sprite: SpriteState = { id: command.id, image: command.image, position: command.position };
+      const exists = state.sprites.some((s) => s.id === command.id);
+      return {
+        ...state,
+        sprites: exists
+          ? state.sprites.map((s) => (s.id === command.id ? sprite : s))
+          : [...state.sprites, sprite]
+      };
+    }
+    case "HideSprite": {
+      if (!state.sprites.some((s) => s.id === command.id)) return state;
+      return { ...state, sprites: state.sprites.filter((s) => s.id !== command.id) };
+    }
   }
 }
 

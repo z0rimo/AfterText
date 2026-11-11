@@ -5,7 +5,8 @@ import {
   acceptPlayerState,
   applyPresentation,
   INITIAL_PRESENTATION_STATE,
-  type PresentationState
+  type PresentationState,
+  type SpriteState
 } from "../src/presentation-state.js";
 
 const BACKGROUND_A: PresentationCommand = { type: "Background", image: "a.jpg" };
@@ -23,41 +24,55 @@ function musicTrack(track: string, volume?: number): PresentationCommand {
   return { type: "Music", track, volume };
 }
 
-const BASE_STATE: PresentationState = { background: null, layer: null, cameraZoom: 1, music: null };
+function showSprite(id: string, image: string, position: "left" | "center" | "right"): PresentationCommand {
+  return { type: "ShowSprite", id, image, position };
+}
+
+function hideSprite(id: string): PresentationCommand {
+  return { type: "HideSprite", id };
+}
+
+const BASE_STATE: PresentationState = { background: null, layer: null, cameraZoom: 1, music: null, sprites: [] };
 
 describe("INITIAL_PRESENTATION_STATE", () => {
-  it("starts with both asset slots empty, identity camera zoom, and no music", () => {
-    expect(INITIAL_PRESENTATION_STATE).toEqual({ background: null, layer: null, cameraZoom: 1, music: null });
+  it("starts with both asset slots empty, identity camera zoom, no music, and no sprites", () => {
+    expect(INITIAL_PRESENTATION_STATE).toEqual({
+      background: null,
+      layer: null,
+      cameraZoom: 1,
+      music: null,
+      sprites: []
+    });
   });
 });
 
 describe("applyPresentation: Background/Layer", () => {
   it("Background sets the background slot", () => {
     const result = applyPresentation(INITIAL_PRESENTATION_STATE, BACKGROUND_A);
-    expect(result).toEqual({ background: "a.jpg", layer: null, cameraZoom: 1, music: null });
+    expect(result).toEqual({ background: "a.jpg", layer: null, cameraZoom: 1, music: null, sprites: [] });
   });
 
   it("Background replaces an existing background", () => {
     const first = applyPresentation(INITIAL_PRESENTATION_STATE, BACKGROUND_A);
     const second = applyPresentation(first, BACKGROUND_B);
-    expect(second).toEqual({ background: "b.jpg", layer: null, cameraZoom: 1, music: null });
+    expect(second).toEqual({ background: "b.jpg", layer: null, cameraZoom: 1, music: null, sprites: [] });
   });
 
   it("Layer sets the layer slot", () => {
     const result = applyPresentation(INITIAL_PRESENTATION_STATE, LAYER_A);
-    expect(result).toEqual({ background: null, layer: "alice.png", cameraZoom: 1, music: null });
+    expect(result).toEqual({ background: null, layer: "alice.png", cameraZoom: 1, music: null, sprites: [] });
   });
 
   it("Layer replaces an existing layer, never appending", () => {
     const first = applyPresentation(INITIAL_PRESENTATION_STATE, LAYER_A);
     const second = applyPresentation(first, LAYER_B);
-    expect(second).toEqual({ background: null, layer: "bob.png", cameraZoom: 1, music: null });
+    expect(second).toEqual({ background: null, layer: "bob.png", cameraZoom: 1, music: null, sprites: [] });
   });
 
   it("Background and Layer are independent slots", () => {
     const withBackground = applyPresentation(INITIAL_PRESENTATION_STATE, BACKGROUND_A);
     const withBoth = applyPresentation(withBackground, LAYER_A);
-    expect(withBoth).toEqual({ background: "a.jpg", layer: "alice.png", cameraZoom: 1, music: null });
+    expect(withBoth).toEqual({ background: "a.jpg", layer: "alice.png", cameraZoom: 1, music: null, sprites: [] });
   });
 
   it("does not mutate the input state", () => {
@@ -75,7 +90,8 @@ describe("applyPresentation: Background/Layer", () => {
       background: "a.jpg",
       layer: "alice.png",
       cameraZoom: 1.5,
-      music: { track: "theme.mp3", volume: 0.5 }
+      music: { track: "theme.mp3", volume: 0.5 },
+      sprites: []
     };
     const result = applyPresentation(state, command);
     expect(result).toBe(state);
@@ -86,14 +102,16 @@ describe("applyPresentation: Background/Layer", () => {
       background: "a.jpg",
       layer: "alice.png",
       cameraZoom: 1,
-      music: { track: "theme.mp3", volume: undefined }
+      music: { track: "theme.mp3", volume: undefined },
+      sprites: []
     };
     const result = applyPresentation(state, cameraZoomTo(1.5));
     expect(result).toEqual({
       background: "a.jpg",
       layer: "alice.png",
       cameraZoom: 1.5,
-      music: { track: "theme.mp3", volume: undefined }
+      music: { track: "theme.mp3", volume: undefined },
+      sprites: []
     });
   });
 });
@@ -181,7 +199,13 @@ describe("applyPresentation: Music", () => {
   });
 
   it("Music preserves background/layer/cameraZoom", () => {
-    const state: PresentationState = { background: "a.jpg", layer: "alice.png", cameraZoom: 1.5, music: null };
+    const state: PresentationState = {
+      background: "a.jpg",
+      layer: "alice.png",
+      cameraZoom: 1.5,
+      music: null,
+      sprites: []
+    };
     const result = applyPresentation(state, musicTrack("theme.mp3"));
     expect(result.background).toBe("a.jpg");
     expect(result.layer).toBe("alice.png");
@@ -208,6 +232,99 @@ describe("applyPresentation: Music", () => {
   });
 });
 
+describe("applyPresentation: Sprite", () => {
+  it("initial sprites is empty", () => {
+    expect(INITIAL_PRESENTATION_STATE.sprites).toEqual([]);
+  });
+
+  it("showing an absent sprite appends it (back-most and only entry)", () => {
+    const result = applyPresentation(INITIAL_PRESENTATION_STATE, showSprite("alice", "a.png", "left"));
+    expect(result.sprites).toEqual<readonly SpriteState[]>([{ id: "alice", image: "a.png", position: "left" }]);
+  });
+
+  it("showing a second absent sprite appends it front-most, preserving back-to-front order", () => {
+    const first = applyPresentation(INITIAL_PRESENTATION_STATE, showSprite("alice", "a.png", "left"));
+    const second = applyPresentation(first, showSprite("bob", "b.png", "right"));
+    expect(second.sprites).toEqual<readonly SpriteState[]>([
+      { id: "alice", image: "a.png", position: "left" },
+      { id: "bob", image: "b.png", position: "right" }
+    ]);
+  });
+
+  it("showing an already-visible id replaces its complete state in place, preserving its stacking index", () => {
+    const afterAlice = applyPresentation(INITIAL_PRESENTATION_STATE, showSprite("alice", "a.png", "left"));
+    const afterBob = applyPresentation(afterAlice, showSprite("bob", "b.png", "right"));
+    const afterAliceUpdate = applyPresentation(afterBob, showSprite("alice", "a2.png", "center"));
+    expect(afterAliceUpdate.sprites).toEqual<readonly SpriteState[]>([
+      { id: "alice", image: "a2.png", position: "center" },
+      { id: "bob", image: "b.png", position: "right" }
+    ]);
+  });
+
+  it("showing an already-visible id never reorders it to the front", () => {
+    const afterAlice = applyPresentation(INITIAL_PRESENTATION_STATE, showSprite("alice", "a.png", "left"));
+    const afterBob = applyPresentation(afterAlice, showSprite("bob", "b.png", "right"));
+    const afterAliceUpdate = applyPresentation(afterBob, showSprite("alice", "a2.png", "center"));
+    expect(afterAliceUpdate.sprites.map((s) => s.id)).not.toEqual(["bob", "alice"]);
+    expect(afterAliceUpdate.sprites.map((s) => s.id)).toEqual(["alice", "bob"]);
+  });
+
+  it("an identical show (same id/image/position) is still a real state transition, never suppressed by value equality", () => {
+    const first = applyPresentation(INITIAL_PRESENTATION_STATE, showSprite("alice", "a.png", "left"));
+    const second = applyPresentation(first, showSprite("alice", "a.png", "left"));
+    expect(second.sprites).toEqual<readonly SpriteState[]>([{ id: "alice", image: "a.png", position: "left" }]);
+    expect(second).not.toBe(first);
+    expect(second.sprites).not.toBe(first.sprites);
+  });
+
+  it("hiding a visible sprite removes it, preserving the relative order of the rest", () => {
+    const afterAlice = applyPresentation(INITIAL_PRESENTATION_STATE, showSprite("alice", "a.png", "left"));
+    const afterBob = applyPresentation(afterAlice, showSprite("bob", "b.png", "right"));
+    const result = applyPresentation(afterBob, hideSprite("alice"));
+    expect(result.sprites).toEqual<readonly SpriteState[]>([{ id: "bob", image: "b.png", position: "right" }]);
+  });
+
+  it("hiding an id that is not currently visible is a true no-op (same PresentationState reference)", () => {
+    const state = applyPresentation(INITIAL_PRESENTATION_STATE, showSprite("bob", "b.png", "right"));
+    const result = applyPresentation(state, hideSprite("alice"));
+    expect(result).toBe(state);
+    expect(result.sprites).toEqual<readonly SpriteState[]>([{ id: "bob", image: "b.png", position: "right" }]);
+  });
+
+  it("hide then re-show appends the sprite as a new front-most occurrence, not its old position", () => {
+    const afterAlice = applyPresentation(INITIAL_PRESENTATION_STATE, showSprite("alice", "a.png", "left"));
+    const afterBob = applyPresentation(afterAlice, showSprite("bob", "b.png", "right"));
+    const afterHide = applyPresentation(afterBob, hideSprite("alice"));
+    const afterReshow = applyPresentation(afterHide, showSprite("alice", "a2.png", "center"));
+    expect(afterReshow.sprites).toEqual<readonly SpriteState[]>([
+      { id: "bob", image: "b.png", position: "right" },
+      { id: "alice", image: "a2.png", position: "center" }
+    ]);
+  });
+
+  it("ShowSprite/HideSprite preserve background/layer/cameraZoom/music", () => {
+    const state: PresentationState = {
+      background: "a.jpg",
+      layer: "alice.png",
+      cameraZoom: 1.5,
+      music: { track: "theme.mp3", volume: 0.5 },
+      sprites: []
+    };
+    const result = applyPresentation(state, showSprite("alice", "a.png", "left"));
+    expect(result.background).toBe("a.jpg");
+    expect(result.layer).toBe("alice.png");
+    expect(result.cameraZoom).toBe(1.5);
+    expect(result.music).toBe(state.music);
+  });
+
+  it("does not mutate the input state's sprites array on show", () => {
+    const before = applyPresentation(INITIAL_PRESENTATION_STATE, showSprite("alice", "a.png", "left"));
+    const beforeSnapshot = [...before.sprites];
+    applyPresentation(before, showSprite("bob", "b.png", "right"));
+    expect(before.sprites).toEqual(beforeSnapshot);
+  });
+});
+
 describe("acceptPlayerState", () => {
   function playerWithResult(result: PlayerState["current"]): PlayerState {
     return { runtimeState: {} as PlayerState["runtimeState"], cursor: [], current: result };
@@ -216,7 +333,7 @@ describe("acceptPlayerState", () => {
   it("applies the command when the Player result is a presentation", () => {
     const player = playerWithResult({ type: "presentation", command: BACKGROUND_A });
     const result = acceptPlayerState(INITIAL_PRESENTATION_STATE, player);
-    expect(result).toEqual({ background: "a.jpg", layer: null, cameraZoom: 1, music: null });
+    expect(result).toEqual({ background: "a.jpg", layer: null, cameraZoom: 1, music: null, sprites: [] });
   });
 
   it("applies a valid Camera zoom through the same acceptance path", () => {
