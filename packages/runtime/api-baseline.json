@@ -104,7 +104,7 @@
     "PresentationResult": {
       "kind": "interface",
       "members": [
-        "readonly property command: BackgroundCommand | CameraZoomCommand | LayerCommand | MusicCommand | PauseCommand | SfxCommand",
+        "readonly property command: BackgroundCommand | CameraZoomCommand | HideSpriteCommand | LayerCommand | MusicCommand | PauseCommand | SfxCommand | ShowSpriteCommand",
         "readonly property type: \"presentation\""
       ]
     },

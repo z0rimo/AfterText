@@ -21,7 +21,20 @@ describe("simple presentation directives", () => {
     ["@music rain.mp3", { type: "Music", track: "rain.mp3", volume: undefined }],
     ["@sfx door.wav", { type: "Sfx", clip: "door.wav" }],
     ["@pause 1200ms", { type: "Pause", durationMs: 1200 }],
-    ["@pause 2s", { type: "Pause", durationMs: 2000 }]
+    ["@pause 2s", { type: "Pause", durationMs: 2000 }],
+    [
+      "@sprite show id=alice image=alice.png position=left",
+      { type: "ShowSprite", id: "alice", image: "alice.png", position: "left" }
+    ],
+    [
+      "@sprite show id=alice image=alice.png position=center",
+      { type: "ShowSprite", id: "alice", image: "alice.png", position: "center" }
+    ],
+    [
+      "@sprite show id=alice image=alice.png position=right",
+      { type: "ShowSprite", id: "alice", image: "alice.png", position: "right" }
+    ],
+    ["@sprite hide id=alice", { type: "HideSprite", id: "alice" }]
   ])("normalizes %s into a typed command", (line, expected) => {
     const { document } = compileOk(`@scene s\n${line}\n`);
     const block = presentation(document.scenes[0]!.blocks[0]!);
@@ -35,13 +48,72 @@ describe("simple presentation directives", () => {
     ["@camera pan to=1", "unsupported camera action"],
     ["@camera zoom", "missing required to="],
     ["@camera zoom to=abc", "non-numeric to="],
-    ["@music rain.mp3 volume=loud", "non-numeric volume"]
+    ["@music rain.mp3 volume=loud", "non-numeric volume"],
+    ["@sprite", "missing action"],
+    ["@sprite dance id=alice", "unsupported sprite action"],
+    ["@sprite show", "missing id="],
+    ["@sprite show id=alice", "missing image="],
+    ["@sprite show id=alice image=a.png", "missing position="],
+    ["@sprite show id=alice image=a.png position=middle", "unsupported position"],
+    ["@sprite hide", "missing id="],
+    ["@sprite hide id=", "trailing id= with no value is not a recognized named parameter"]
   ])("reports AT1301 for %s (%s)", (line) => {
     const result = compile(`@scene s\n${line}\n`);
     expect(codesOf(result.diagnostics)).toContain("AT1301");
     expect(result.hasErrors).toBe(true);
     // Malformed presentation directives are dropped rather than emitting a
     // node with placeholder values.
+    expect(result.document.scenes[0]!.blocks).toHaveLength(0);
+  });
+});
+
+describe("@sprite inherited Presentation tokenizer behavior", () => {
+  it("last occurrence wins on a duplicate id= (existing global Presentation behavior)", () => {
+    const { document } = compileOk("@scene s\n@sprite show id=alice id=bob image=a.png position=left\n");
+    const block = presentation(document.scenes[0]!.blocks[0]!);
+    expect(block.command).toEqual({ type: "ShowSprite", id: "bob", image: "a.png", position: "left" });
+  });
+
+  it("silently ignores an unknown named parameter (existing global Presentation behavior)", () => {
+    const { document } = compileOk("@scene s\n@sprite show id=alice image=a.png position=left foo=bar\n");
+    const block = presentation(document.scenes[0]!.blocks[0]!);
+    expect(block.command).toEqual({ type: "ShowSprite", id: "alice", image: "a.png", position: "left" });
+  });
+
+  it.each(["true", "false", "null", "__proto__", "Alice"])(
+    "treats id=%s as an ordinary, un-evaluated string",
+    (id) => {
+      const { document } = compileOk(`@scene s\n@sprite show id=${id} image=a.png position=left\n`);
+      const block = presentation(document.scenes[0]!.blocks[0]!);
+      expect(block.command).toEqual({ type: "ShowSprite", id, image: "a.png", position: "left" });
+    }
+  );
+
+  it("is case-sensitive: id=Alice and id=alice are distinct string identities", () => {
+    const { document: lower } = compileOk("@scene s\n@sprite show id=alice image=a.png position=left\n");
+    const { document: upper } = compileOk("@scene s\n@sprite show id=Alice image=a.png position=left\n");
+    const lowerBlock = presentation(lower.scenes[0]!.blocks[0]!);
+    const upperBlock = presentation(upper.scenes[0]!.blocks[0]!);
+    expect(lowerBlock.command).toMatchObject({ id: "alice" });
+    expect(upperBlock.command).toMatchObject({ id: "Alice" });
+  });
+
+  // Documents a pre-existing, non-Sprite-specific tokenizer limitation
+  // (docs/CORE_SPEC.md Section 31.11): quoting is recognized only when a
+  // whole token's first character is `"` (an unprefixed positional token),
+  // never for a `key="..."` named-parameter token. `id="alice bob"` is
+  // therefore not decoded as one quoted string — `"alice` and `bob"`
+  // tokenize as two separate tokens, and since neither matches
+  // `key=value`, the second becomes a stray extra positional token. That
+  // joins into the same `value` used for the action token (`show`/`hide`),
+  // so the directive fails as an "unsupported sprite action" — exactly the
+  // same mechanism `@camera zoom to=` already hits today (confirmed: both
+  // report "unsupported <x> action" for an analogous malformed trailing
+  // token). This pins the actual current behavior; it is not something
+  // this PR fixes or should fix.
+  it("fails as an unsupported action, not a decoded quoted id= (pre-existing tokenizer limitation, not fixed here)", () => {
+    const result = compile('@scene s\n@sprite show id="alice bob" image=a.png position=left\n');
+    expect(codesOf(result.diagnostics)).toContain("AT1301");
     expect(result.document.scenes[0]!.blocks).toHaveLength(0);
   });
 });

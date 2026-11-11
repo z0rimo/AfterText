@@ -28,6 +28,10 @@ export type {
   MusicCommand,
   SfxCommand,
   PauseCommand,
+  SpritePosition,
+  ShowSpriteCommand,
+  HideSpriteCommand,
+  SpriteCommand,
   PresentationCommand
 } from "./presentation.js";
 export type {

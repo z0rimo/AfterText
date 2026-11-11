@@ -23,6 +23,10 @@ function describe(command: PresentationCommand): string {
       return `Sfx: ${command.clip}`;
     case "Pause":
       return `Pause: ${command.durationMs}ms`;
+    case "ShowSprite":
+      return `Sprite show: ${command.id}`;
+    case "HideSprite":
+      return `Sprite hide: ${command.id}`;
   }
 }
 

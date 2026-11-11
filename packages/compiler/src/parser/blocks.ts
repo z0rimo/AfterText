@@ -1,6 +1,6 @@
 import type { SourcePosition, SourceSpan } from "../ast/span.js";
 import type { ExpressionNode } from "../ast/expression.js";
-import type { CameraAction, PresentationCommand } from "../ast/presentation.js";
+import type { CameraAction, PresentationCommand, SpritePosition } from "../ast/presentation.js";
 import type {
   ChoiceItem,
   ChoiceNode,
@@ -376,6 +376,11 @@ function parseNumericParam(text: string): number | undefined {
 
 const KNOWN_CAMERA_ACTIONS = new Set<CameraAction>(["zoom"]);
 
+/** Not an AST type — unlike Camera's `action`, Sprite's action is encoded entirely by the command's `type` discriminant (docs/CORE_SPEC.md Section 31.2). */
+const KNOWN_SPRITE_ACTIONS = new Set<string>(["show", "hide"]);
+
+const KNOWN_SPRITE_POSITIONS = new Set<SpritePosition>(["left", "center", "right"]);
+
 /**
  * Parses, validates, and normalizes a presentation directive into a typed
  * PresentationCommand (see ast/presentation.ts). Unit strings like `6s` and
@@ -586,6 +591,51 @@ function parsePresentation(
       return {
         type: "Presentation",
         command: { type: "Camera", action: "zoom", to, durationMs },
+        span,
+        parameterValueSpans,
+        positionalValueSpan,
+        argumentsEndPosition,
+        parameterRemovalSpans,
+        contiguousPositionalSpan,
+        commandRemovalSpan
+      };
+    }
+    case "sprite": {
+      if (value === undefined) return fail("@sprite requires an action");
+      if (!KNOWN_SPRITE_ACTIONS.has(value)) {
+        return fail(`unsupported sprite action "${value}"`);
+      }
+
+      if (params["id"] === undefined) return fail(`@sprite ${value} requires "id="`);
+      const id = params["id"];
+
+      if (value === "hide") {
+        return {
+          type: "Presentation",
+          command: { type: "HideSprite", id },
+          span,
+          parameterValueSpans,
+          positionalValueSpan,
+          argumentsEndPosition,
+          parameterRemovalSpans,
+          contiguousPositionalSpan,
+          commandRemovalSpan
+        };
+      }
+
+      // value === "show" — the only other member of KNOWN_SPRITE_ACTIONS.
+      if (params["image"] === undefined) return fail('@sprite show requires "image="');
+      const image = params["image"];
+
+      if (params["position"] === undefined) return fail('@sprite show requires "position="');
+      if (!KNOWN_SPRITE_POSITIONS.has(params["position"] as SpritePosition)) {
+        return fail(`unsupported position "${params["position"]}"`);
+      }
+      const position = params["position"] as SpritePosition;
+
+      return {
+        type: "Presentation",
+        command: { type: "ShowSprite", id, image, position },
         span,
         parameterValueSpans,
         positionalValueSpan,

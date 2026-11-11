@@ -208,6 +208,13 @@
         "readonly property type: \"Heading\""
       ]
     },
+    "HideSpriteCommand": {
+      "kind": "interface",
+      "members": [
+        "readonly property id: string",
+        "readonly property type: \"HideSprite\""
+      ]
+    },
     "IdentifierExpression": {
       "kind": "interface",
       "members": [
@@ -304,17 +311,19 @@
       "members": [
         "union BackgroundCommand",
         "union CameraZoomCommand",
+        "union HideSpriteCommand",
         "union LayerCommand",
         "union MusicCommand",
         "union PauseCommand",
-        "union SfxCommand"
+        "union SfxCommand",
+        "union ShowSpriteCommand"
       ]
     },
     "PresentationNode": {
       "kind": "interface",
       "members": [
         "readonly property argumentsEndPosition?: SourcePosition",
-        "readonly property command: BackgroundCommand | CameraZoomCommand | LayerCommand | MusicCommand | PauseCommand | SfxCommand",
+        "readonly property command: BackgroundCommand | CameraZoomCommand | HideSpriteCommand | LayerCommand | MusicCommand | PauseCommand | SfxCommand | ShowSpriteCommand",
         "readonly property commandRemovalSpan?: SourceSpan",
         "readonly property contiguousPositionalSpan?: SourceSpan",
         "readonly property parameterRemovalSpans?: Readonly<Record<string, SourceSpan>>",
@@ -352,6 +361,15 @@
         "readonly property type: \"Sfx\""
       ]
     },
+    "ShowSpriteCommand": {
+      "kind": "interface",
+      "members": [
+        "readonly property id: string",
+        "readonly property image: string",
+        "readonly property position: \"center\" | \"left\" | \"right\"",
+        "readonly property type: \"ShowSprite\""
+      ]
+    },
     "SourcePosition": {
       "kind": "interface",
       "members": [
@@ -365,6 +383,21 @@
       "members": [
         "readonly property end: SourcePosition",
         "readonly property start: SourcePosition"
+      ]
+    },
+    "SpriteCommand": {
+      "kind": "type",
+      "members": [
+        "union HideSpriteCommand",
+        "union ShowSpriteCommand"
+      ]
+    },
+    "SpritePosition": {
+      "kind": "type",
+      "members": [
+        "union \"center\"",
+        "union \"left\"",
+        "union \"right\""
       ]
     },
     "StateValue": {
