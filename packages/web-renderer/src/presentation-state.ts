@@ -66,7 +66,14 @@ function isValidCameraZoom(to: number): boolean {
  * event, never suppressed/deduplicated by value equality (Section 23.8).
  * `Sfx`/`Pause` leave `PresentationState` unchanged (returns the same
  * reference) — Sfx has no persistent semantic state by design (Section
- * 23.13). Exhaustive over `PresentationCommand` — no permissive `default`.
+ * 23.13). `ShowSprite`/`HideSprite` likewise leave `PresentationState`
+ * unchanged for now — Sprite Stage's own accumulated visual state (docs/
+ * CORE_SPEC.md Section 31.5–31.9) is implemented in a later Renderer slice;
+ * this is the same inert-acknowledgement staging already locked for
+ * Camera/Music/Sfx in earlier section eras (Section 19.13, 20.20) before
+ * each received its own design pass, never a claim that Sprite's locked
+ * semantics are renderer no-ops. Exhaustive over `PresentationCommand` — no
+ * permissive `default`.
  */
 export function applyPresentation(state: PresentationState, command: PresentationCommand): PresentationState {
   switch (command.type) {
@@ -80,6 +87,8 @@ export function applyPresentation(state: PresentationState, command: Presentatio
       return { ...state, music: { track: command.track, volume: command.volume } };
     case "Sfx":
     case "Pause":
+    case "ShowSprite":
+    case "HideSprite":
       return state;
   }
 }

@@ -1,8 +1,9 @@
 /**
  * Typed presentation commands for @background, @layer, @camera, @music,
- * @sfx, and @pause. The compiler owns parsing, unit normalization (e.g.
- * `6s` / `1200ms` -> milliseconds), and validation of these directives, so
- * runtime code consumes typed values and never re-parses directive text.
+ * @sfx, @pause, and @sprite. The compiler owns parsing, unit normalization
+ * (e.g. `6s` / `1200ms` -> milliseconds), and validation of these
+ * directives, so runtime code consumes typed values and never re-parses
+ * directive text.
  */
 
 export interface BackgroundCommand {
@@ -46,10 +47,28 @@ export interface PauseCommand {
   readonly durationMs: number;
 }
 
+/** v0.2.0 defines exactly three named stage positions (docs/CORE_SPEC.md Section 31.10). */
+export type SpritePosition = "left" | "center" | "right";
+
+export interface ShowSpriteCommand {
+  readonly type: "ShowSprite";
+  readonly id: string;
+  readonly image: string;
+  readonly position: SpritePosition;
+}
+
+export interface HideSpriteCommand {
+  readonly type: "HideSprite";
+  readonly id: string;
+}
+
+export type SpriteCommand = ShowSpriteCommand | HideSpriteCommand;
+
 export type PresentationCommand =
   | BackgroundCommand
   | LayerCommand
   | CameraCommand
   | MusicCommand
   | SfxCommand
-  | PauseCommand;
+  | PauseCommand
+  | SpriteCommand;

@@ -4,12 +4,13 @@ export const SIMPLE_PRESENTATION_DIRECTIVES = [
   "camera",
   "music",
   "sfx",
-  "pause"
+  "pause",
+  "sprite"
 ] as const;
 
 export type SimplePresentationDirective = (typeof SIMPLE_PRESENTATION_DIRECTIVES)[number];
 
-/** Every directive name recognized in AfterText v0.1. */
+/** Every directive name recognized by AfterText. */
 export const REGISTERED_DIRECTIVES = new Set<string>([
   "scene",
   ...SIMPLE_PRESENTATION_DIRECTIVES,
