@@ -2056,6 +2056,8 @@ Foreground Layer slot: 0 or 1 image
 
 A later `Layer` command replaces the previous foreground Layer slot — it does not append an independent additional layer. This is the only interpretation the current data model honestly supports, not a design preference; true named/multiple layers require a future compiler/DSL change and are explicitly not designed here. Do not claim or imply support for multiple simultaneous Layer commands.
 
+Section 31 (Web Sprite Stage) introduces a parallel, independent `@sprite` namespace for multiple simultaneously visible, named-position sprites. It does not lift this Layer limitation and does not repurpose `@layer` — `Layer`'s single-slot semantics remain exactly as locked above.
+
 ## 20.4 No Clear Operation
 
 The compiler requires a non-empty `image` value for both `@background` and `@layer` — there is no AST representation for "clear background" or "clear layer." This slice therefore supports **set/replace only**. No empty-string or magic-token clear convention is invented. A future syntax/AST change may introduce explicit clearing if a concrete need arises.
@@ -2135,6 +2137,8 @@ export interface AfterTextPlayerProps {
 
 Synchronous, deterministic, pure from the renderer's perspective — not an event callback, and not subject to Section 19.4's callback deferral. Default when omitted: identity (`resolved URL = ref`), so a story already using usable browser paths/URLs works with zero configuration.
 
+Section 31 (Web Sprite Stage) expects this kind union to widen additively to include `"sprite"`, mirroring the `"music"`/`"sfx"` widening already locked in Section 23.20. That widening is not performed by this section.
+
 ## 20.12 Asset Identity vs. Narrative Identity
 
 Changing `resolveAsset`'s function identity never restarts `PlayerState`, clears Reader Memory, resets `RuntimeState`, or resets `PresentationState`. Narrative/session identity remains tied only to `document` (Section 19.6). `PresentationState` stores the raw author reference (Section 20.5); resolution happens at render time, so an existing background/layer re-resolves for free if a host supplies a different resolver, with no story replay.
@@ -2166,6 +2170,8 @@ z = 2   narrative UI
 ```
 
 Exact CSS values are implementation-level; the ordering itself is deterministic and fixed.
+
+Section 31 (Web Sprite Stage) extends this relative ordering with a Sprites layer positioned between the foreground Layer and narrative UI; see Section 31.14. This section's Background/Layer/narrative-UI ordering is unchanged by that extension.
 
 ## 20.18 Structural Styling Policy
 
@@ -3456,3 +3462,167 @@ When documents disagree, use this precedence:
 Status: RESERVED
 
 The section number is reserved and stable. The development roadmap is maintained outside this specification.
+
+---
+
+# 31. Web Sprite Stage
+
+## 31.1 Scope of This Slice
+
+This section locks the v0.2.0 Sprite Stage design — the first v0.2 Core feature. In scope: multiple simultaneously visible sprites, `@sprite show`, `@sprite hide`, and `left`/`center`/`right` named positioning. Explicitly out of scope for this slice: dialogue/character speech, visual transitions, free x/y positioning, scale/rotation, authored z-index, bring-to-front/send-to-back commands, sprite animation, Save/Load, history/backlog, auto/skip, voice, multi-file projects, and Editor Web support (Section 31.19). This section does not lift the Section 20.3 Layer limitation and does not alter `@layer`'s existing single-slot semantics.
+
+## 31.2 Sprite Directive Syntax
+
+`@sprite` is a Presentation directive following the existing action-token pattern already used by `@camera` (Section 14): a positional action token followed by named parameters.
+
+```at
+@sprite show id=alice image=alice_happy.png position=left
+@sprite hide id=alice
+```
+
+v0.2.0 supports exactly two actions: `show` and `hide`. `@show`, `@hide`, and any other top-level directive, and any additional `@sprite` action (`move`, `replace`, `front`, `back`), are not introduced in this slice.
+
+## 31.3 `ShowSpriteCommand` Semantics
+
+A valid show command is complete and self-contained:
+
+```at
+@sprite show id=<id> image=<image> position=<position>
+```
+
+`id=`, `image=`, and `position=` are all required on every `show` command, including a command that updates a sprite already visible. There is no patch-style inheritance: `@sprite show id=alice image=alice_smile.png` (omitting `position=`) does not inherit Alice's previous position, and `@sprite show id=alice position=center` (omitting `image=`) does not inherit Alice's previous image. Each `ShowSpriteCommand` describes the complete new state for that sprite.
+
+## 31.4 `HideSpriteCommand` Semantics
+
+```at
+@sprite hide id=<id>
+```
+
+`id=` is required. A `HideSpriteCommand` carries no other data.
+
+## 31.5 Sprite State Model
+
+The semantic model is an ordered collection of unique visible sprite IDs, ordered back → front. The recommended renderer representation is equivalent to:
+
+```ts
+readonly sprites: readonly SpriteState[];
+```
+
+where each visible ID occurs at most once. The exact renderer-internal TypeScript representation is not public API (Section 31.17) and is not prescribed beyond this semantic contract. JavaScript object-property enumeration order is explicitly **not** part of the language semantics — an object/`Record`-keyed representation must not be relied upon to carry stacking order.
+
+## 31.6 Same-ID Show Behavior
+
+Showing a sprite whose ID is not currently visible appends it to the front (end) of the ordered visible-sprite collection. Showing a sprite whose ID is already visible replaces that sprite's complete state in place — the replacement does not change its stacking position.
+
+This example is normative:
+
+```at
+@sprite show id=alice image=a.png position=left
+@sprite show id=bob image=b.png position=right
+@sprite show id=alice image=a2.png position=center
+```
+
+Final visible state, back → front: `alice`, `bob`, with `alice.image = a2.png` and `alice.position = center`. The third command atomically replaces Alice's image and position while preserving Alice's existing order position.
+
+## 31.7 Hide Behavior
+
+`@sprite hide id=alice`: if Alice is visible, she is removed completely from the visible-sprite collection — no hidden placeholder and no retained stacking slot are kept. If Alice is not currently visible, this is a no-op, not a runtime error. Hiding one sprite preserves the relative order of all remaining sprites.
+
+## 31.8 Hide → Re-show Ordering
+
+A hidden sprite loses its previous stacking position. A re-show after a hide is a new visible occurrence and is appended at the front (end), not restored to its prior position. This is normative, not implementation-defined:
+
+```at
+@sprite show id=alice image=a.png position=left
+@sprite show id=bob image=b.png position=right
+@sprite hide id=alice
+@sprite show id=alice image=a2.png position=center
+```
+
+results in, back → front: `bob`, `alice`.
+
+## 31.9 Ordering Rule
+
+The first `show` of a currently-absent sprite determines its stacking position. Updating an already-visible sprite with another `ShowSpriteCommand` (Section 31.6) never brings it to the front and never otherwise reorders it. None of the following are implicit ordering rules in v0.2.0: position determining stacking, every `show` bringing its sprite to front, or an image change changing stacking. v0.2.0 has no authored z-index, layer number, bring-to-front, or send-to-back control. Future explicit ordering features may be added additively without contradicting this rule.
+
+## 31.10 Position Vocabulary
+
+The position vocabulary for v0.2.0 is exactly:
+
+```ts
+type SpritePosition = "left" | "center" | "right";
+```
+
+A position identifies a renderer-defined named stage slot. The Core language does not define pixel coordinates, percent coordinates, x/y values, scale, rotation, anchors, or z-index — exact CSS/pixel geometry is implementation-level, consistent with Section 20.18's existing structural-styling policy. Position is required on every `ShowSpriteCommand` (Section 31.3).
+
+## 31.11 Sprite Identity Grammar
+
+`id=` uses the existing Presentation named-parameter value grammar (Section 14) — no second identifier lexer is introduced for Sprite Stage. A sprite ID is an opaque, case-sensitive string identity, compared only within the currently visible Sprite Stage collection; it is not an expression-language variable, and `true`/`false`/`null` are not reinterpreted as expression literals when they occur as an `id=` value. Quoted parameter values follow the existing Presentation tokenizer's quoting rules unchanged. Sprite identity does not depend on Record/object-key semantics (Section 31.5).
+
+## 31.12 Asset Resolution
+
+`image=` is an authored, opaque visual asset reference. The Compiler stores it verbatim, with no compiler-side URL/path normalization — exactly the existing Background/Layer/Music/Sfx ownership split (Section 20.13): the Compiler owns the opaque authored reference, the Web Renderer owns resolution and safe rendering. Sprite assets resolve through the existing visual asset-resolution boundary (Section 20.11) and the existing browser image URL safety check (Section 20.14); no separate sprite-specific resolution or safety mechanism is introduced.
+
+## 31.13 Asset Resolver Widening
+
+The public visual asset kind union (Section 20.11) is expected to widen additively to include `"sprite"` during implementation, mirroring the `"music"`/`"sfx"` widening already locked in Section 23.20. This section documents the expected contract only; it does not itself widen the type or update any API baseline.
+
+## 31.14 Visual Stacking Relationship
+
+The normative relative visual order is:
+
+```text
+Background < Layer < Sprites < Narrative UI
+```
+
+This describes relative order only — it does not lock a literal CSS value (e.g. no `z-index: 1.5` is specified), and it does not expose CSS z-index numbers as part of the Core contract. The Renderer may implement this relationship using stacking contexts, DOM order, integer z-index values, or an equivalent mechanism, as long as the relative ordering above is preserved. Existing Background/Layer/narrative-UI behavior (Section 20.17) is unchanged. Sprites participate in the scene/camera visual surface (Section 22.10) rather than becoming narrative UI.
+
+## 31.15 Runtime/Player Ownership
+
+```text
+Compiler:          owns Sprite Presentation syntax and typed commands
+Runtime / Player:   pass Presentation commands through opaquely
+Web Renderer:       owns accumulated sprite presentation state and visual rendering
+```
+
+Expected production changes: Runtime — NONE; Player — NONE. If implementation reveals this assumption to be false, implementation must stop and report the contradiction rather than moving Sprite semantics into Runtime or Player.
+
+## 31.16 `PresentationState` Lifecycle
+
+Sprite state follows the existing `PresentationState` lifecycle (Section 20.5–20.6) exactly: created with the renderer session, incrementally accumulated from Presentation commands, persistent across scene navigation, reset on Restart (Section 20.23), and reset on new `document` replacement (Section 20.24). No Sprite-specific reset rule is introduced. Sprite state is Renderer Presentation state — it is not `StoryState` or `ReaderState`, and this slice does not solve Save/Load (Section 31.19).
+
+## 31.17 Public API Scope
+
+Expected additive Compiler exports, in the obvious location (alongside `CameraAction`/`CameraZoomCommand`):
+
+```ts
+export type SpritePosition = "left" | "center" | "right";
+
+export interface ShowSpriteCommand {
+  readonly type: "ShowSprite";
+  readonly id: string;
+  readonly image: string;
+  readonly position: SpritePosition;
+}
+
+export interface HideSpriteCommand {
+  readonly type: "HideSprite";
+  readonly id: string;
+}
+
+export type SpriteCommand = ShowSpriteCommand | HideSpriteCommand;
+```
+
+`PresentationCommand` gains these variants additively. This is expected to cause compile failures in any external exhaustive switch over `PresentationCommand` with no `default` case — that is the existing, deliberate exhaustive-switch safety philosophy already locked for this union (Section 20.8), not a regression to work around. Renderer-internal sprite state representation (Section 31.5) remains private — no new public export is expected from `@aftertext/web-renderer` beyond the existing `AfterTextPlayerProps.resolveAsset` kind widening (Section 31.13). This section does not update any API baseline.
+
+## 31.18 Invalid Syntax / Diagnostics
+
+A malformed `@sprite` directive is a Compiler error and produces no Sprite Presentation command, using the existing malformed-Presentation diagnostic family (Section 16) unless implementation demonstrates that a different existing diagnostic is required. No new diagnostic code is allocated for Sprite Stage unless implementation demonstrates a real need. Expected invalid shapes include: `@sprite` alone; `@sprite show` with no parameters; `@sprite show id=alice` missing `image=`/`position=`; `@sprite show id=alice image=a.png` missing `position=`; `@sprite show id=alice image=a.png position=middle` (an unsupported position); `@sprite hide` with no `id=`; `@sprite hide id=` with an empty ID; and `@sprite dance id=alice` (an unsupported action). This section establishes the behavior; it does not prescribe every final diagnostic message.
+
+## 31.19 Explicit Non-Goals for This Slice
+
+Not part of v0.2.0 Sprite Stage: dialogue/character speech model, visual transitions/dissolve, free x/y positioning, scale/rotation, authored z-index, bring-to-front/send-to-back commands, sprite animation, Save/Load, history/backlog, auto/skip, voice, multi-file projects, and Editor Web support.
+
+## 31.20 Future Compatibility
+
+The locked state model (Section 31.5–31.9) does not preclude future additive operations such as `show`/`hide` with a transition, an explicit move/reposition operation, or explicit authored ordering. Their syntax and semantics are not designed here.
