@@ -323,9 +323,15 @@ describe("Asset load failure", () => {
 });
 
 describe("Sprite rendering", () => {
+  // Shared by several scenarios below so the repeated literal setup lines
+  // themselves aren't flagged as duplicated code across otherwise-distinct
+  // tests.
+  const SHOW_ALICE_LEFT = "@sprite show id=alice image=a.png position=left";
+  const SHOW_BOB_RIGHT = "@sprite show id=bob image=b.png position=right";
+
   it("one shown Sprite renders exactly one decorative image", async () => {
     const user = userEvent.setup();
-    const container = await renderDirectives(user, ["@sprite show id=alice image=a.png position=left"]);
+    const container = await renderDirectives(user, [SHOW_ALICE_LEFT]);
 
     const img = image(container);
     expect(img).toHaveAttribute("src", "a.png");
@@ -334,10 +340,7 @@ describe("Sprite rendering", () => {
 
   it("two shown Sprites render simultaneously, in PresentationState.sprites' own back-to-front DOM order", async () => {
     const user = userEvent.setup();
-    const container = await renderDirectives(user, [
-      "@sprite show id=alice image=a.png position=left",
-      "@sprite show id=bob image=b.png position=right"
-    ]);
+    const container = await renderDirectives(user, [SHOW_ALICE_LEFT, SHOW_BOB_RIGHT]);
 
     // alice (shown first, back-most) is the first DOM child; bob (front-most) is last.
     expect(images(container).map((img) => img.getAttribute("src"))).toEqual(["a.png", "b.png"]);
@@ -359,22 +362,16 @@ describe("Sprite rendering", () => {
 
   it("showing an already-visible id replaces its image while preserving stacking position", async () => {
     const user = userEvent.setup();
-    const container = await renderDirectives(user, [
-      "@sprite show id=alice image=a.png position=left",
-      "@sprite show id=bob image=b.png position=right",
-      "@sprite show id=alice image=a2.png position=left"
-    ]);
+    const replaceImage = "@sprite show id=alice image=a2.png position=left";
+    const container = await renderDirectives(user, [SHOW_ALICE_LEFT, SHOW_BOB_RIGHT, replaceImage]);
 
     expect(images(container).map((img) => img.getAttribute("src"))).toEqual(["a2.png", "b.png"]);
   });
 
   it("showing an already-visible id replaces its position without changing its identity or order", async () => {
     const user = userEvent.setup();
-    const container = await renderDirectives(user, [
-      "@sprite show id=alice image=a.png position=left",
-      "@sprite show id=bob image=b.png position=right",
-      "@sprite show id=alice image=a.png position=center"
-    ]);
+    const replacePosition = "@sprite show id=alice image=a.png position=center";
+    const container = await renderDirectives(user, [SHOW_ALICE_LEFT, SHOW_BOB_RIGHT, replacePosition]);
 
     const srcs = images(container).map((img) => img.getAttribute("src"));
     expect(srcs).toEqual(["a.png", "b.png"]);
@@ -386,22 +383,16 @@ describe("Sprite rendering", () => {
 
   it("hiding a Sprite removes its visual entirely", async () => {
     const user = userEvent.setup();
-    const container = await renderDirectives(user, [
-      "@sprite show id=alice image=a.png position=left",
-      "@sprite hide id=alice"
-    ]);
+    const container = await renderDirectives(user, [SHOW_ALICE_LEFT, "@sprite hide id=alice"]);
 
     expect(images(container)).toHaveLength(0);
   });
 
   it("hide then re-show places the Sprite back at the front, not its old position", async () => {
     const user = userEvent.setup();
-    const container = await renderDirectives(user, [
-      "@sprite show id=alice image=a.png position=left",
-      "@sprite show id=bob image=b.png position=right",
-      "@sprite hide id=alice",
-      "@sprite show id=alice image=a2.png position=center"
-    ]);
+    const hideAlice = "@sprite hide id=alice";
+    const reshowAlice = "@sprite show id=alice image=a2.png position=center";
+    const container = await renderDirectives(user, [SHOW_ALICE_LEFT, SHOW_BOB_RIGHT, hideAlice, reshowAlice]);
 
     expect(images(container).map((img) => img.getAttribute("src"))).toEqual(["b.png", "a2.png"]);
   });
@@ -418,7 +409,7 @@ describe("Sprite rendering", () => {
 
   it("the Sprite container is marked pointer-events: none, never intercepting narrative controls", async () => {
     const user = userEvent.setup();
-    const container = await renderDirectives(user, ["@sprite show id=alice image=a.png position=left"]);
+    const container = await renderDirectives(user, [SHOW_ALICE_LEFT]);
 
     const spriteContainer = image(container).parentElement!.parentElement as HTMLElement;
     expect(spriteContainer.style.pointerEvents).toBe("none");
@@ -433,11 +424,7 @@ describe("Sprite rendering", () => {
         seen.push({ ref, kind });
         return `/assets/${ref}`;
       };
-      const container = await renderDirectives(
-        user,
-        ["@sprite show id=alice image=a.png position=left"],
-        { resolveAsset }
-      );
+      const container = await renderDirectives(user, [SHOW_ALICE_LEFT], { resolveAsset });
 
       expect(image(container)).toHaveAttribute("src", "/assets/a.png");
       expect(seen).toContainEqual({ ref: "a.png", kind: "sprite" });
@@ -457,7 +444,7 @@ describe("Sprite rendering", () => {
           "@layer l.png",
           "@music m.mp3",
           "@sfx s.wav",
-          "@sprite show id=alice image=a.png position=left"
+          SHOW_ALICE_LEFT
         ],
         { resolveAsset }
       );
@@ -468,11 +455,7 @@ describe("Sprite rendering", () => {
 
     it("a resolver returning null shows a non-fatal fallback, not a broken image", async () => {
       const user = userEvent.setup();
-      const container = await renderDirectives(
-        user,
-        ["@sprite show id=alice image=a.png position=left"],
-        { resolveAsset: () => null }
-      );
+      const container = await renderDirectives(user, [SHOW_ALICE_LEFT], { resolveAsset: () => null });
 
       expect(images(container)).toHaveLength(0);
       expect(screen.getByText(/unavailable: a\.png/)).toBeInTheDocument();
@@ -480,11 +463,9 @@ describe("Sprite rendering", () => {
 
     it("an unsafe resolved URL never becomes an image source", async () => {
       const user = userEvent.setup();
-      const container = await renderDirectives(
-        user,
-        ["@sprite show id=alice image=a.png position=left"],
-        { resolveAsset: () => "javascript:alert(1)" }
-      );
+      const container = await renderDirectives(user, [SHOW_ALICE_LEFT], {
+        resolveAsset: () => "javascript:alert(1)"
+      });
 
       expect(images(container)).toHaveLength(0);
       expect(screen.getByText(/unavailable: a\.png/)).toBeInTheDocument();
@@ -494,7 +475,7 @@ describe("Sprite rendering", () => {
   describe("Asset load failure", () => {
     it("a failed Sprite image load renders the fallback and never produces a RuntimeExecutionError", async () => {
       const user = userEvent.setup();
-      const container = await renderDirectives(user, ["@sprite show id=alice image=a.png position=left"]);
+      const container = await renderDirectives(user, [SHOW_ALICE_LEFT]);
 
       fireEvent.error(image(container));
 
@@ -507,7 +488,7 @@ describe("Sprite rendering", () => {
       const user = userEvent.setup();
       const container = await renderDirectives(
         user,
-        ["@sprite show id=alice image=a.png position=left", "@sprite show id=alice image=a2.png position=left"],
+        [SHOW_ALICE_LEFT, "@sprite show id=alice image=a2.png position=left"],
         { reach: 1 }
       );
 
