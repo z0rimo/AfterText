@@ -56,6 +56,14 @@ She smiles when she notices the key in your hand.
 
 She steps closer.
 
+@say speaker=Alice
+
+"Are you here for the key too?"
+
+@say speaker=Bob
+
+"We've been waiting a while — *patiently*, I promise."
+
 @camera zoom to=1
 
 @sprite hide id=bob

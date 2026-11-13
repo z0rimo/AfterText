@@ -2,7 +2,10 @@ import type { HeadingNode, InlineNode, ParagraphNode } from "@aftertext/compiler
 import { Fragment, type ReactNode } from "react";
 import { isSafeLinkUrl } from "./link-safety.js";
 
-function renderInline(nodes: readonly InlineNode[]): ReactNode {
+// Exported for reuse by DialogueView (docs/CORE_SPEC.md Section 32.25) — an
+// internal module export only, never re-exported from src/index.ts, so this
+// is not a public API change.
+export function renderInline(nodes: readonly InlineNode[]): ReactNode {
   return nodes.map((node, index) => {
     switch (node.type) {
       case "Text":

@@ -44,7 +44,7 @@ npm run dev
 
 Opens a local Vite dev server running a small sample story that exercises
 every implemented Presentation feature — Background, Layer, Camera, Music,
-Sfx, Pause, Choice, and Sprite Stage — through the real compiler and
+Sfx, Pause, Choice, Sprite Stage, and Dialogue — through the real compiler and
 `AfterTextPlayer`.
 
 ## License
