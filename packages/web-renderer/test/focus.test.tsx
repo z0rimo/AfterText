@@ -54,6 +54,30 @@ describe("focus after a user-initiated narrative transition", () => {
     expectFocused("Next");
   });
 
+  it("content -> Dialogue -> Dialogue -> content: every transition keeps focus on the current primary control", () => {
+    const source = [
+      "@scene s",
+      "Narration.",
+      "",
+      "@say speaker=Alice",
+      "First.",
+      "",
+      "@say speaker=Bob",
+      "Second.",
+      "",
+      "After."
+    ].join("\n");
+    render(<AfterTextPlayer document={compileDoc(source)} />);
+    activate("Start");
+    expectFocused("Next"); // content
+    activate("Next");
+    expectFocused("Next"); // Dialogue (Alice)
+    activate("Next");
+    expectFocused("Next"); // Dialogue (Bob)
+    activate("Next");
+    expectFocused("Next"); // content
+  });
+
   it("completed moves focus to Restart, and Restart moves it to Start", () => {
     render(<AfterTextPlayer document={compileDoc("@scene s\nOnly.\n")} />);
     activate("Start");

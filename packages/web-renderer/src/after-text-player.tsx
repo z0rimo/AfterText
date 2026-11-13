@@ -5,6 +5,7 @@ import { useEffect, useRef, useState, type ReactElement, type ReactNode, type Re
 import { ChoiceView } from "./choice-view.js";
 import { CompletedView } from "./completed-view.js";
 import { ContentView } from "./content-view.js";
+import { DialogueView } from "./dialogue-view.js";
 import { ErrorView } from "./error-view.js";
 import { PresentationView } from "./presentation-view.js";
 import { PresentationSurface } from "./presentation-surface.js";
@@ -272,6 +273,16 @@ function renderCurrent(
           timedUnlocked={timedUnlocked}
           primaryRef={primaryRef}
         />;
+
+    case "dialogue":
+      return (
+        <DialogueView
+          speaker={player.current.speaker}
+          content={player.current.content}
+          onAdvance={advance}
+          primaryRef={primaryRef}
+        />
+      );
 
     case "choice":
       return <ChoiceView items={player.current.items} onSelect={select} primaryRef={primaryRef} />;
