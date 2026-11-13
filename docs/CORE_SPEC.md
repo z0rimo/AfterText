@@ -899,7 +899,7 @@ The `DiagnosticCode` type currently contains exactly the codes below. Existing c
 | `AT1105` | error | Content between a `@variant` header and its first `@when`/`@otherwise` belongs to no branch and is ignored. The span covers the ignored blocks, from the start of the first to the end of the last. | Parser |
 | `AT1201` | error | Unsupported initial-state entry: either a value that is not a string, finite number, boolean, or null (arrays, nested maps, aliases, a non-map `state`, `.inf`, `.nan`), or an unsupported key (Section 12). The entry is excluded from the initial state. | Parser |
 | `AT1202` | error | Invalid frontmatter: a YAML syntax error (including duplicate keys), or a `title` / `entry` whose value is not a string (Section 12). | Parser |
-| `AT1301` | error | Malformed presentation directive. | Parser |
+| `AT1301` | error | Malformed presentation directive, or malformed Dialogue (`@say`) directive (Section 32.11). | Parser |
 | `AT1302` | error | Presentation numeric value is not representable as a finite number. | Parser |
 | `AT2001` | error | Malformed expression. | Parser |
 | `AT2002` | error | Unknown builtin call name. | Validation |
@@ -3469,7 +3469,7 @@ The section number is reserved and stable. The development roadmap is maintained
 
 ## 31.1 Scope of This Slice
 
-This section locks the v0.2.0 Sprite Stage design — the first v0.2 Core feature. In scope: multiple simultaneously visible sprites, `@sprite show`, `@sprite hide`, and `left`/`center`/`right` named positioning. Explicitly out of scope for this slice: dialogue/character speech, visual transitions, free x/y positioning, scale/rotation, authored z-index, bring-to-front/send-to-back commands, sprite animation, Save/Load, history/backlog, auto/skip, voice, multi-file projects, and Editor Web support (Section 31.19). This section does not lift the Section 20.3 Layer limitation and does not alter `@layer`'s existing single-slot semantics.
+This section locks the v0.2.0 Sprite Stage design — the first v0.2 Core feature. In scope: multiple simultaneously visible sprites, `@sprite show`, `@sprite hide`, and `left`/`center`/`right` named positioning. Explicitly out of scope for this slice: dialogue/character speech, visual transitions, free x/y positioning, scale/rotation, authored z-index, bring-to-front/send-to-back commands, sprite animation, Save/Load, history/backlog, auto/skip, voice, multi-file projects, and Editor Web support (Section 31.19). This section does not lift the Section 20.3 Layer limitation and does not alter `@layer`'s existing single-slot semantics. Dialogue/character speech is addressed as its own, later, v0.3 feature slice — see Section 32 — and remains architecturally independent of Sprite Stage (Section 32.21).
 
 ## 31.2 Sprite Directive Syntax
 
@@ -3621,8 +3621,352 @@ A malformed `@sprite` directive is a Compiler error and produces no Sprite Prese
 
 ## 31.19 Explicit Non-Goals for This Slice
 
-Not part of v0.2.0 Sprite Stage: dialogue/character speech model, visual transitions/dissolve, free x/y positioning, scale/rotation, authored z-index, bring-to-front/send-to-back commands, sprite animation, Save/Load, history/backlog, auto/skip, voice, multi-file projects, and Editor Web support.
+Not part of v0.2.0 Sprite Stage: dialogue/character speech model, visual transitions/dissolve, free x/y positioning, scale/rotation, authored z-index, bring-to-front/send-to-back commands, sprite animation, Save/Load, history/backlog, auto/skip, voice, multi-file projects, and Editor Web support. The dialogue/character speech model is locked separately as the v0.3 Dialogue slice — see Section 32.
 
 ## 31.20 Future Compatibility
 
 The locked state model (Section 31.5–31.9) does not preclude future additive operations such as `show`/`hide` with a transition, an explicit move/reposition operation, or explicit authored ordering. Their syntax and semantics are not designed here.
+
+---
+
+# 32. Dialogue
+
+## 32.1 Version Boundary and Scope of This Slice
+
+This section locks the v0.3.0 Dialogue design — the first v0.3 Core feature, following v0.2.0 Sprite Stage (Section 31). Dialogue is not retroactively part of Sprite Stage; Sprite Stage's existing locked semantics (Section 31.2–31.17) are unchanged by this section, and Section 31.1/31.19's own Dialogue exclusions remain valid v0.2.0 history, not a contradiction of this section. The locked v0.3.0 Dialogue MVP contains exactly: a required `speaker`, plus Dialogue content. Explicitly out of scope for this slice (Section 32.34): a Character registry, Sprite-to-speaker binding, portrait binding, voice, a voice resolver, speaker colors, custom nameplates, typing animation, text speed, auto, skip, history/backlog, Save/Load, lip sync, expression control, localization IDs, and Editor structured editing.
+
+## 32.2 Canonical Dialogue Syntax
+
+The one canonical v0.3.0 authored form is a `@say` directive header, naming the speaker, followed by the spoken content as an ordinary prose body:
+
+```at
+@say speaker=Alice
+
+Hello there.
+```
+
+A blank line between the `@say` header and its content is permitted but carries no special meaning (Section 32.3); the directly-adjacent form is equally canonical:
+
+```at
+@say speaker=Alice
+Hello there.
+```
+
+Both forms are accepted and are semantically identical. Either is sufficient for two independent compiler implementations to agree on what source text constitutes one Dialogue block, given Section 32.3's boundary rule.
+
+## 32.3 Blank-Line / Body Boundary Rule (LOCKED)
+
+Confirmed directly against the existing block-parsing loop (`parseBlockSequence`, which both the leading-scene and every `@scene` body already share): only a directive line (one matched by the existing directive-line grammar, Section 8) ends a run of accumulated non-directive lines. A blank line is not a directive line, so it is swept into the same accumulated run as any other line and carries no boundary meaning by itself.
+
+Applied to `@say`: the Dialogue body begins at the physical line immediately after the `@say` header line and extends through the last line before the next directive line, the next `@scene`, or end of file — whichever comes first. Blank lines occurring anywhere inside that span (immediately after the header, immediately before the next directive, or between would-be paragraphs) are **optional and not individually significant to where the body starts or stops**; they are never required and never forbidden as a separator between the header and its content. What *is* significant is the content the body resolves to once parsed as prose (Section 32.9): a blank line that happens to split the body into two Markdown paragraphs produces a malformed-Dialogue diagnostic (Section 32.9), not a silently-truncated or silently-merged body. This is one precise rule, not three independent "required/optional/forbidden" cases: blank-line placement is always optional and semantically inert on its own; only the resulting Markdown block count/type is ever normative.
+
+## 32.4 Rejected Syntax: Colon Form
+
+v0.3.0 does **not** use
+
+```text
+Alice: Hello.
+```
+
+as Dialogue syntax, and no colon-prefixed prose form is reserved for future Dialogue use. Reason: `Note: ...`, `Warning: ...`, `Time: 10:30`, `key: value`, and any other colon-containing prose line are lexically indistinguishable from a putative speaker line without either a Character registry to validate the prefix against (Section 32.22, explicitly not introduced) or a heuristic reinterpretation of ordinary authored prose, which contradicts the existing "no silently changing author intent" diagnostic philosophy (Section 16). Ordinary prose containing a colon remains ordinary prose, unconditionally, in v0.3.0 and indefinitely thereafter unless a future revision of this document explicitly says otherwise.
+
+## 32.5 Rejected Syntax: Single-Line Quoted Content Parameter
+
+v0.3.0 does **not** use
+
+```at
+@say speaker=Alice text="Hello."
+```
+
+as the canonical syntax. Dialogue content is not forced through a quoted named parameter. Reason: multiline prose, the existing Markdown subset (Section 32.8), and quotation marks occurring naturally within spoken dialogue should continue to use the existing prose/Markdown pipeline (Section 15) rather than a second, directive-argument-shaped text channel. This also avoids forcing authors to escape every quotation mark inside ordinary spoken dialogue.
+
+## 32.6 Speaker Parameter
+
+`speaker` is the only required Dialogue header parameter in v0.3.0. Speaker semantics:
+
+```text
+opaque authored string
+non-empty (after trimming)
+case-sensitive
+preserved verbatim
+no normalization
+no lexical Character-name grammar beyond non-empty authored text
+```
+
+Legal speaker values include `Alice`, `alice`, `???`, `Narrator`, `Dr.Smith`. `speaker` uses the existing Presentation-style named-parameter value grammar (`key=value`, Section 14) — no second identifier lexer is introduced. This is invalid in v0.3.0:
+
+```at
+@say speaker=
+```
+
+An empty or whitespace-only `speaker` (including the case where no `speaker=` parameter is present at all) is a malformed Dialogue directive (Section 32.11).
+
+## 32.7 Speaker Quoting — Confirmed Current Limitation (LOCKED)
+
+Confirmed directly against the existing Presentation argument tokenizer (`tokenizePresentationArgs`, Section 14): quoted-value syntax (`"..."`) is recognized **only** when it opens a complete argument token at a token boundary — this is how **positional** Presentation arguments gained quoting (Section 14, "Quoted Presentation positional arguments"). **Named** `key=value` parameters do not receive this treatment: a quote occurring after `key=` is not at a token boundary, so it is not recognized as quoted syntax at all; it is instead absorbed, unquoted, as ordinary literal characters of that token, and quoting a named value such as `speaker="Dr. Smith"` does **not** parse as the single value `Dr. Smith`. This is the same limitation Section 14 already documents explicitly: "Named quoted values explicitly deferred." Dialogue inherits this pre-existing, directive-kind-agnostic compiler limitation; it is not a new restriction invented for Dialogue, and no Dialogue-specific quoting or escaping rule is introduced to work around it.
+
+**Locked consequence for v0.3.0:** a `speaker` value must not contain whitespace. `@say speaker=Alice`, `@say speaker=Narrator`, and `@say speaker=Dr.Smith` are valid. `@say speaker="Dr. Smith"` is not expressible in v0.3.0 syntax; authors who want a multi-word label must omit the whitespace (e.g. `Dr.Smith`) until a future, generic (non-Dialogue-specific) named-parameter quoting capability is added to the Presentation argument tokenizer — a cross-cutting compiler enhancement this section does not design or schedule.
+
+## 32.8 Narration vs. Dialogue
+
+```text
+Narration = existing ParagraphNode / plain prose, exactly as today
+Dialogue  = @say with a non-empty speaker (Section 32.6)
+```
+
+There is no speakerless Dialogue variant in v0.3.0. An author who wants the visible label "Narrator" writes `@say speaker=Narrator` — a legal, ordinary Dialogue block whose speaker value happens to be the authored string `Narrator`, which has no engine-defined special meaning (Section 32.22). This is the single semantic distinction: a `ParagraphNode` never carries a speaker; a `DialogueNode` always does.
+
+## 32.9 Dialogue Content and Body Cardinality
+
+Dialogue content reuses the existing Markdown/prose model unchanged: `readonly InlineNode[]`, the same representation already used by `ParagraphNode`/`HeadingNode` children (text, emphasis, strong, inline code, links, line breaks — Section 15). No Dialogue-specific Markdown subset or parser is introduced; the existing single Markdown-to-AST bridge is reused as-is.
+
+**Body rule (LOCKED):** the lines following a `@say` header, up to the next directive/`@scene`/end-of-file (Section 32.3), are parsed through the existing prose/Markdown pipeline exactly as any other prose run is. The result must be **exactly one block**, and that block must be a `ParagraphNode`:
+
+- **Zero resulting blocks** (the body is empty or contains only blank lines) is a malformed Dialogue directive — missing content (Section 32.11).
+- **More than one resulting block** — for example, a blank line splitting the body into two Markdown paragraphs before the next directive — is a malformed Dialogue directive, not silently-accepted multi-paragraph Dialogue and not a silent first-paragraph-only truncation (Section 32.11).
+- **A `HeadingNode` result** (the body opens with a Markdown heading, e.g. `# Hello`) is a malformed Dialogue directive, not a reinterpretation of the heading as Dialogue content (Section 32.10).
+
+One Dialogue block therefore maps to exactly one Paragraph-equivalent body, by construction of this rule, not by a separate arity restriction layered on top of unrestricted Markdown parsing.
+
+## 32.10 Heading After `@say`
+
+Confirmed by Section 32.9's body rule: Dialogue content must resolve to Paragraph-style prose, never `HeadingNode`. This is invalid:
+
+```at
+@say speaker=Alice
+
+# Hello
+```
+
+This uses the existing malformed-directive diagnostic family (Section 32.11); the heading is never reinterpreted as Dialogue content.
+
+## 32.11 Diagnostics
+
+No new diagnostic code is allocated for Dialogue in v0.3.0. Existing families are reused, exactly as already extended once for Sprite Stage's own malformed shapes (Section 31.18):
+
+| Case | Code |
+|---|---|
+| Unknown directive typo (e.g. `@sya`) | `AT1001` (unchanged) |
+| `@say` appearing where only a terminator/bullet directive is valid (e.g. inside a `@choice` body) | `AT1009` (unchanged — already directive-agnostic by its existing "any directive line inside a `@choice` body" clause) |
+| Missing or empty `speaker` (Section 32.6) | `AT1301` |
+| Unsupported `@say` parameter | `AT1301` |
+| Missing Dialogue content (Section 32.9) | `AT1301` |
+| Dialogue content resolves to more than one block (Section 32.9) | `AT1301` |
+| Dialogue content resolves to a `HeadingNode` (Section 32.10) | `AT1301` |
+
+`AT1301`'s documented meaning (Section 16) is widened, additively, from "malformed presentation directive" to "malformed presentation directive, or malformed Dialogue (`@say`) directive" — the same one-code-many-reasons convention already established for `AT1301`/`AT1302` elsewhere in this document (Section 14), distinguished by diagnostic reason text, not by code number. This section does not prescribe every final diagnostic message.
+
+## 32.12 Compiler AST
+
+Dialogue is a distinct `StoryBlock` variant:
+
+```ts
+export interface DialogueNode {
+  readonly type: "Dialogue";
+  readonly speaker: string;
+  readonly content: readonly InlineNode[];
+  readonly span: SourceSpan;
+  readonly speakerSourceSpan: SourceSpan;
+  readonly contentSourceSpan: SourceSpan;
+}
+```
+
+`StoryBlock` widens to include `DialogueNode`. Dialogue is:
+
+```text
+NOT PresentationNode
+NOT Paragraph metadata
+NOT Character metadata
+```
+
+## 32.13 Why Dialogue Is a Distinct `StoryBlock`
+
+```text
+Paragraph = narration
+Dialogue  = spoken content with required speaker identity
+```
+
+These have different execution semantics (Section 32.15–32.16) and different render semantics (Section 32.24) — Dialogue is not merely Paragraph styling, so it is not modeled as metadata attached to `ParagraphNode`.
+
+## 32.14 Source Metadata
+
+The minimum locked metadata is `span`, `speakerSourceSpan`, and `contentSourceSpan`:
+
+```text
+span               — covers the complete Dialogue block (header through content)
+speakerSourceSpan  — covers the authored speaker value (Section 32.6)
+contentSourceSpan  — covers the authored Dialogue prose body, equal to the lifted ParagraphNode's own span
+```
+
+No `parameterValueSpans`, `commandRemovalSpan`, `characterSourceSpan`, or `voiceSourceSpan` is added for v0.3.0 — Dialogue has exactly one named header parameter, so these two purpose-specific spans are sufficient without the generic per-parameter source-tooling machinery introduced for multi-parameter Presentation directives (Section 14, Section 25.36). Since v0.3.0 speaker values are never quoted (Section 32.7), `speakerSourceSpan` always covers the unquoted authored value text directly, with no quote-delimiter inclusion/exclusion question to resolve; no Dialogue-specific span convention is introduced.
+
+## 32.15 Runtime Semantics
+
+Dialogue is an observable suspension/result, exactly like narrative content. One Dialogue block consumes one Runtime block, produces one Dialogue result, and requires one ordinary user advance. No callback, no asynchronous operation, no timed behavior, and no automatic continuation are introduced.
+
+## 32.16 Runtime Result
+
+```ts
+export interface DialogueResult {
+  readonly type: "dialogue";
+  readonly speaker: string;
+  readonly content: readonly InlineNode[];
+}
+```
+
+`ExecutionResult` widens to include `DialogueResult`. This is a real, additive public union widening (Section 32.28) — it is not described as zero API impact.
+
+## 32.17 Runtime Persistent State
+
+```text
+Dialogue persistent Runtime state: NONE
+```
+
+No `currentSpeaker`, `previousSpeaker`, or `dialogueHistory` field is added to `StoryState`/`ReaderState`/`RuntimeState`. Dialogue exists only as the current observable result, exactly like Paragraph content.
+
+## 32.18 Player Semantics
+
+Player owns no separate Dialogue model. Player continues to expose Runtime's `ExecutionResult` through `PlayerState.current` unchanged (Section 18.3, "No Separate PlayerView Model"); no new Player state-machine semantics are introduced. Player may re-export `DialogueResult` consistent with its existing policy of re-exporting Runtime result types individually (Section 32.28).
+
+## 32.19 Progression Semantics
+
+```text
+Dialogue → ordinary Next/advance
+```
+
+Each Dialogue block requires exactly one advance, exactly like a Paragraph. Interaction with Choice, Goto/navigation, Presentation, Pause, and scene boundaries uses the existing generic block-progression rules unchanged — no Dialogue-specific adjacency rule is introduced. Dialogue does not auto-advance.
+
+## 32.20 Presentation Independence
+
+A Dialogue result does not show, hide, or highlight a Sprite, change Camera, Background, or Layer, or start voice. Presentation state (Section 20.5–20.6) simply persists across a Dialogue result exactly as it already persists across ordinary content — `acceptPlayerState`-style accumulation logic that only inspects a Presentation-typed result is unaffected by a `"dialogue"`-typed result passing through it.
+
+## 32.21 Sprite Independence
+
+```text
+Dialogue speaker strings and Sprite IDs are independent namespaces/concepts in v0.3.0.
+```
+
+Both of the following are valid and unremarkable:
+
+```text
+speaker = Alice, visible sprites = none
+speaker = Bob,   visible sprite id = alice
+```
+
+No Compiler or Runtime validation ties `speaker` to `ShowSpriteCommand.id` (Section 31.11). This architectural independence is bidirectional with Section 31.1's own cross-reference: Sprite Stage (v0.2.0) and Dialogue (v0.3.0) are separable features that may each be used with or without the other.
+
+## 32.22 Character Registry
+
+```text
+Character registry required for Dialogue MVP: NO
+```
+
+No implicit registry is reserved, and no speaker declaration is required before use. A future Character system may interpret the opaque speaker string (Section 32.23), but that mapping is not part of v0.3.0 Dialogue semantics.
+
+## 32.23 Future Character Seam
+
+`speaker` remains an opaque authored key/string that a future host/Character layer may map to richer metadata (portrait, voice, display styling). This section documents the compatibility seam only; it does not specify that future registry's syntax or schema, and `DialogueNode.speaker`'s type does not change into a Character object/reference in v0.3.0.
+
+## 32.24 Renderer Semantic Structure
+
+The locked semantic UI structure is:
+
+```text
+Dialogue view
+├─ visible speaker label
+├─ rendered Dialogue content
+└─ ordinary Next control
+```
+
+Narrative content does not show a speaker label; this is the one locked semantic rendering difference. Fonts, colors, border boxes, VN-style panels, animations, and themes are not locked by this section.
+
+## 32.25 Inline Rendering Reuse
+
+Dialogue content uses the same inline-Markdown rendering semantics as ordinary content — no second Markdown-to-DOM renderer with different behavior is introduced. Whether the implementation reuses an exported internal helper or another internal primitive to do so is implementation detail, not a public API concern (Section 32.26).
+
+## 32.26 `DialogueView` Public API Decision (LOCKED)
+
+Confirmed directly against the current `@aftertext/web-renderer` public surface (`packages/web-renderer/src/index.ts`): the package exports exactly `AfterTextPlayer` and `AfterTextPlayerProps`, with an explicit standing policy comment that no internal result-view component is exported — `ContentView` and `ChoiceView`, the closest existing peers to a future `DialogueView`, are themselves **not** public, and have no entry in `packages/web-renderer/api-baseline.json`.
+
+**Locked decision: B — `DialogueView` (and any `DialogueViewProps`) remains internal.** This follows the already-established rule directly: peer narrative/result views are internal, so symmetry means keeping `DialogueView` internal too, not making it the first public result-view component. `@aftertext/web-renderer`'s public surface remains exactly `AfterTextPlayer`/`AfterTextPlayerProps`; `AfterTextPlayerProps` gains no new required prop and no new asset-resolution callback for Dialogue, since Dialogue needs no asset resolution (Section 32.20).
+
+## 32.27 Renderer Accessibility
+
+At minimum: the speaker is rendered as text, never via HTML injection; Dialogue content uses the existing safe inline rendering already used for ordinary content (no `dangerouslySetInnerHTML`); and Next remains an actual interactive control. No new ARIA role is introduced without an established reason.
+
+## 32.28 Public API Impact
+
+```text
+@aftertext/compiler
+- new DialogueNode export
+- StoryBlock union widens
+
+@aftertext/runtime
+- new DialogueResult export
+- ExecutionResult union widens
+
+@aftertext/player
+- DialogueResult type re-export, consistent with existing Runtime-result re-export policy
+
+@aftertext/web-renderer
+- no new export (Section 32.26)
+- AfterTextPlayerProps gains no new asset callback or Dialogue-specific required prop
+```
+
+Both `StoryBlock` and `ExecutionResult` widening are real, additive public union widenings — exhaustive downstream switches over either union with no `default`/`never` case may require updates (Section 32.29). This is not described as zero API impact, consistent with the equivalent `PresentationCommand` widening already locked for Sprite Stage (Section 31.17).
+
+## 32.29 Exhaustiveness / Implementation Risk
+
+Two semantically critical dispatches must handle Dialogue: the Runtime execution dispatch (over `StoryBlock`/block type), and the Renderer current-result dispatch (over `ExecutionResult`/result type). Current TypeScript structure at these two dispatch points is not guaranteed to enforce exhaustiveness automatically (neither is required to use a `never`-check pattern). Implementation must therefore prove, by test rather than by relying on `tsc` alone, that a Dialogue block:
+
+```text
+executes instead of becoming a runtime invalid-block error
+renders instead of silently producing no UI
+```
+
+## 32.30 Implementation Slicing
+
+Implementation proceeds as two PR slices.
+
+**PR 1 — Compiler + Runtime + Player semantic vertical slice.** Includes: `DialogueNode`; the `@say` parser; diagnostics (Section 32.11); source metadata (Section 32.14); `DialogueResult`; Runtime advance semantics (Section 32.15); Player type pass-through/re-export (Section 32.18); API baselines (Section 32.31); semantic tests (Section 32.32). PR 1 must end in a real, executable Dialogue result — no intermediate state where Dialogue parses but Runtime rejects it as an invalid block.
+
+**PR 2 — Web Renderer.** Includes: `DialogueView` (internal, Section 32.26); the Renderer current-result dispatch's Dialogue case; Markdown rendering reuse (Section 32.25); Next behavior; renderer tests; at most one cross-layer integration case if still valuable; a canonical demo beat (Section 32.33); a Web Renderer API baseline update only if implementation later demonstrates one is actually required.
+
+No release occurs between an unusable parse-only state and executable Dialogue semantics.
+
+## 32.31 Expected API-Baseline Changes by PR
+
+```text
+PR 1:
+packages/compiler/api-baseline.json   — changes
+packages/runtime/api-baseline.json    — changes
+packages/player/api-baseline.json     — changes
+packages/web-renderer/api-baseline.json — unchanged
+
+PR 2:
+packages/web-renderer/api-baseline.json — unchanged (Section 32.26: DialogueView is internal)
+```
+
+No package version is bumped as part of either implementation slice (Section 32.1); versioning is a separate, decoupled release step, consistent with existing practice (all four packages remained at `0.1.1` through the entire Sprite Stage merge).
+
+## 32.32 Tests Required by the Locked Contract
+
+Compiler coverage should include at least: single Dialogue; Markdown content (emphasis/strong/inline code/links); multiline content; missing speaker; empty speaker; speaker containing whitespace (confirmed unsupported, Section 32.7); missing content; multiple-paragraph content rejection (Section 32.9); heading-as-content rejection (Section 32.10); misplaced `@say` inside a `@choice` body (AT1009).
+
+Runtime coverage should include at least: a single Dialogue result; two consecutive Dialogue blocks; Dialogue between narration; Dialogue after a Presentation command; Dialogue before a Choice; scene navigation; Restart/new-session behavior if relevant.
+
+Renderer coverage should include at least: speaker visibly rendered; speaker case preserved verbatim; Markdown body rendered; Next advances; two consecutive Dialogue results; Dialogue rendered independent of Sprite state (Section 32.20–32.21).
+
+Character/Sprite-binding tests are explicitly out of scope — no such binding exists (Section 32.21–32.22).
+
+## 32.33 Demo Contract
+
+After Renderer implementation (PR 2), the canonical demo (`packages/web-renderer/demo/sample.at`) may gain a small Dialogue beat added to the existing Alice/Bob Sprite sequence. No second demo is created, and the demo is not modified as part of this spec-lock section.
+
+## 32.34 Explicit Non-Goals for This Slice
+
+Not part of v0.3.0 Dialogue: Character registry, colon syntax (Section 32.4), single-line quoted `text=` Dialogue (Section 32.5), speakerless Dialogue (Section 32.8), Sprite binding (Section 32.21), portraits, voice, voice resolver, speaker colors, custom nameplates, typing animation, text speed, auto, skip, history/backlog, Save/Load, lip sync, expression control, localization IDs, styles/themes, and Editor structured editing.
+
+## 32.35 Future Compatibility
+
+The locked v0.3.0 Dialogue model (Section 32.6–32.21) does not preclude future additive features such as a Character registry resolving the opaque `speaker` string (Section 32.23), generic named-parameter quoting lifting Section 32.7's current limitation, or Sprite-to-speaker binding. Their syntax and semantics are not designed here.
