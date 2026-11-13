@@ -3656,9 +3656,24 @@ Both forms are accepted and are semantically identical. Either is sufficient for
 
 ## 32.3 Blank-Line / Body Boundary Rule (LOCKED)
 
-Confirmed directly against the existing block-parsing loop (`parseBlockSequence`, which both the leading-scene and every `@scene` body already share): only a directive line (one matched by the existing directive-line grammar, Section 8) ends a run of accumulated non-directive lines. A blank line is not a directive line, so it is swept into the same accumulated run as any other line and carries no boundary meaning by itself.
+Confirmed directly against the existing block-parsing loop (`parseBlockSequence`, which both the leading-scene and every `@scene` body already share): only a directive line (one matched by the existing directive-line grammar, Section 8) ends a *generic* run of accumulated non-directive lines. That generic rule is unchanged for ordinary narration, which may still freely contain any number of blank lines and resolve to any number of paragraphs within one scene body.
 
-Applied to `@say`: the Dialogue body begins at the physical line immediately after the `@say` header line and extends through the last line before the next directive line, the next `@scene`, or end of file — whichever comes first. Blank lines occurring anywhere inside that span (immediately after the header, immediately before the next directive, or between would-be paragraphs) are **optional and not individually significant to where the body starts or stops**; they are never required and never forbidden as a separator between the header and its content. What *is* significant is the content the body resolves to once parsed as prose (Section 32.9): a blank line that happens to split the body into two Markdown paragraphs produces a malformed-Dialogue diagnostic (Section 32.9), not a silently-truncated or silently-merged body. This is one precise rule, not three independent "required/optional/forbidden" cases: blank-line placement is always optional and semantically inert on its own; only the resulting Markdown block count/type is ever normative.
+Dialogue's own body-collection is narrower than that generic rule, by deliberate design — specifically so that a Dialogue block can be immediately followed by ordinary narration in the same scene, with no intervening directive required (Section 32.32's "Dialogue between narration" case depends on this). Applied to `@say`:
+
+1. Any blank lines immediately following the `@say` header line are leading trivia: skipped, not part of the body, not individually significant. Skipping zero blank lines and skipping several are equivalent.
+2. The Dialogue body begins at the first non-blank line reached this way and extends through every contiguous following non-blank line.
+3. The body ends — and `@say`'s own line consumption stops — at whichever of the following comes first: **the next blank line**, the next directive line, the next `@scene`, or end of file. The terminating blank line itself (and everything after it) is never consumed by `@say`; it is left for the ordinary block-parsing loop to process exactly as if `@say` had never claimed it.
+
+A blank line's significance therefore differs by position, precisely and only because of where it falls relative to content: a blank line *before* any Dialogue content is inert leading trivia (step 1); a blank line *after* Dialogue content has begun ends the Dialogue body (step 3) — not because blank lines are forbidden inside Dialogue, but because a blank line is exactly the existing Markdown paragraph-boundary signal, and Dialogue content is locked to exactly one paragraph (Section 32.9). This is normative:
+
+```at
+@say speaker=Alice
+Hello.
+
+The room goes dark.
+```
+
+`Hello.` alone is Alice's Dialogue content; the blank line ends the Dialogue body; `The room goes dark.` is ordinary narration immediately following in the same scene, requiring no directive to return to narration. This is the canonical way to author Dialogue followed by narration, and it resolves identically whether or not a blank line was also used between the header and `Hello.` (Section 32.2).
 
 ## 32.4 Rejected Syntax: Colon Form
 
@@ -3693,7 +3708,7 @@ no normalization
 no lexical Character-name grammar beyond non-empty authored text
 ```
 
-Legal speaker values include `Alice`, `alice`, `???`, `Narrator`, `Dr.Smith`. `speaker` uses the existing Presentation-style named-parameter value grammar (`key=value`, Section 14) — no second identifier lexer is introduced. This is invalid in v0.3.0:
+Legal speaker values include `Alice`, `alice`, `???`, `Narrator`, `Dr.Smith`. `speaker` is written as a single `key=value` header parameter using the same whitespace-delimited token shape already established for Presentation's named parameters (Section 14), but it is parsed by a separate, Dialogue-owned header scanner, not by the Presentation argument tokenizer itself (Section 32.7). This is invalid in v0.3.0:
 
 ```at
 @say speaker=
@@ -3703,9 +3718,11 @@ An empty or whitespace-only `speaker` (including the case where no `speaker=` pa
 
 ## 32.7 Speaker Quoting — Confirmed Current Limitation (LOCKED)
 
-Confirmed directly against the existing Presentation argument tokenizer (`tokenizePresentationArgs`, Section 14): quoted-value syntax (`"..."`) is recognized **only** when it opens a complete argument token at a token boundary — this is how **positional** Presentation arguments gained quoting (Section 14, "Quoted Presentation positional arguments"). **Named** `key=value` parameters do not receive this treatment: a quote occurring after `key=` is not at a token boundary, so it is not recognized as quoted syntax at all; it is instead absorbed, unquoted, as ordinary literal characters of that token, and quoting a named value such as `speaker="Dr. Smith"` does **not** parse as the single value `Dr. Smith`. This is the same limitation Section 14 already documents explicitly: "Named quoted values explicitly deferred." Dialogue inherits this pre-existing, directive-kind-agnostic compiler limitation; it is not a new restriction invented for Dialogue, and no Dialogue-specific quoting or escaping rule is introduced to work around it.
+Section 14 locks quoted-value syntax (`"..."`) to exactly the Presentation argument tokenizer (`tokenizePresentationArgs`), used only by the seven Presentation directive families, and explicitly states this is never a generic cross-directive lexer — confirmed directly: `@if`/`@elseif`/`@when`, `@set`, `@goto`/`@variant`/`@scene`, and `@choice` each already use their own independent argument-text handling and never call `tokenizePresentationArgs`. Since Dialogue is not a Presentation directive (Section 32.12), `@say`'s `speaker=` header is likewise **not** parsed by `tokenizePresentationArgs` and gains no quoting capability from it. `@say` instead uses its own small, Dialogue-owned header scanner for its single `speaker` parameter (Section 32.6) — a separate function, not an extension of the Presentation argument tokenizer's locked scope.
 
-**Locked consequence for v0.3.0:** a `speaker` value must not contain whitespace. `@say speaker=Alice`, `@say speaker=Narrator`, and `@say speaker=Dr.Smith` are valid. `@say speaker="Dr. Smith"` is not expressible in v0.3.0 syntax; authors who want a multi-word label must omit the whitespace (e.g. `Dr.Smith`) until a future, generic (non-Dialogue-specific) named-parameter quoting capability is added to the Presentation argument tokenizer — a cross-cutting compiler enhancement this section does not design or schedule.
+That Dialogue-owned scanner deliberately mirrors Presentation's existing *unquoted* named-parameter token shape (whitespace-delimited `key=value`, Section 14) for authoring consistency, but — exactly like every other non-Presentation directive — it does not reuse or extend Presentation's quoted-token recognition: a quote occurring after `speaker=` is not recognized as quoted syntax by this scanner either, so it is absorbed as ordinary literal characters, and `speaker="Dr. Smith"` does not parse as the single value `Dr. Smith`. This is not a shared or inherited mechanism — it is a separately specified, Dialogue-owned grammar that independently makes the same practical choice, for the same underlying reason Section 14 already records ("Named quoted values explicitly deferred"): quoted named-parameter values are not supported anywhere in the language yet, Presentation or Dialogue alike.
+
+**Locked consequence for v0.3.0:** a `speaker` value must not contain whitespace. `@say speaker=Alice`, `@say speaker=Narrator`, and `@say speaker=Dr.Smith` are valid. `@say speaker="Dr. Smith"` is not expressible in v0.3.0 syntax; authors who want a multi-word label must omit the whitespace (e.g. `Dr.Smith`) until a future, generic named-parameter quoting capability is designed and added — to Presentation's tokenizer, to Dialogue's header scanner, or to both — a cross-cutting enhancement this section does not design or schedule.
 
 ## 32.8 Narration vs. Dialogue
 
@@ -3720,10 +3737,10 @@ There is no speakerless Dialogue variant in v0.3.0. An author who wants the visi
 
 Dialogue content reuses the existing Markdown/prose model unchanged: `readonly InlineNode[]`, the same representation already used by `ParagraphNode`/`HeadingNode` children (text, emphasis, strong, inline code, links, line breaks — Section 15). No Dialogue-specific Markdown subset or parser is introduced; the existing single Markdown-to-AST bridge is reused as-is.
 
-**Body rule (LOCKED):** the lines following a `@say` header, up to the next directive/`@scene`/end-of-file (Section 32.3), are parsed through the existing prose/Markdown pipeline exactly as any other prose run is. The result must be **exactly one block**, and that block must be a `ParagraphNode`:
+**Body rule (LOCKED):** the lines collected per Section 32.3's boundary rule — contiguous non-blank lines following a `@say` header, after skipping any leading blank lines, stopping at the first blank line, the next directive, `@scene`, or end-of-file, whichever comes first — are parsed through the existing prose/Markdown pipeline exactly as any other prose run is. The result must be **exactly one block**, and that block must be a `ParagraphNode`:
 
-- **Zero resulting blocks** (the body is empty or contains only blank lines) is a malformed Dialogue directive — missing content (Section 32.11).
-- **More than one resulting block** — for example, a blank line splitting the body into two Markdown paragraphs before the next directive — is a malformed Dialogue directive, not silently-accepted multi-paragraph Dialogue and not a silent first-paragraph-only truncation (Section 32.11).
+- **Zero resulting blocks** (no non-blank line is found before the boundary) is a malformed Dialogue directive — missing content (Section 32.11).
+- **More than one resulting block** — for example, a line that ordinary Markdown treats as interrupting an in-progress paragraph without requiring a preceding blank line (an ATX heading, a list item, a blockquote marker, a thematic break, or a fenced-code-block opening) — is a malformed Dialogue directive, not silently-accepted multi-block Dialogue and not a silent first-block-only truncation (Section 32.11). Because Section 32.3's boundary already stops body collection at the first blank line, this case is reached only through such a no-blank-line paragraph interruption, never through an ordinary blank-line-separated narration paragraph (which Section 32.3 already excludes from the body).
 - **A `HeadingNode` result** (the body opens with a Markdown heading, e.g. `# Hello`) is a malformed Dialogue directive, not a reinterpretation of the heading as Dialogue content (Section 32.10).
 
 One Dialogue block therefore maps to exactly one Paragraph-equivalent body, by construction of this rule, not by a separate arity restriction layered on top of unrestricted Markdown parsing.
