@@ -3716,6 +3716,8 @@ Legal speaker values include `Alice`, `alice`, `???`, `Narrator`, `Dr.Smith`. `s
 
 An empty or whitespace-only `speaker` (including the case where no `speaker=` parameter is present at all) is a malformed Dialogue directive (Section 32.11).
 
+**Duplicate `speaker` (LOCKED).** `@say speaker=Alice speaker=Bob` is not a diagnostic error. Consistent with the compiler's existing, already-established last-occurrence-wins convention for a duplicated named parameter (Section 14), the Dialogue-owned header scanner (Section 32.7) applies the same rule: `DialogueNode.speaker` takes the value of the **last** occurring `speaker=` token, and `speakerSourceSpan` covers that same last occurrence's value text — the earlier, overridden occurrence contributes nothing to either the semantic value or the source span. This is one rule applied uniformly to both fields; no implementation may expose a first-wins value, a last-wins span (or vice versa), or treat duplication as an error.
+
 ## 32.7 Speaker Quoting — Confirmed Current Limitation (LOCKED)
 
 Section 14 locks quoted-value syntax (`"..."`) to exactly the Presentation argument tokenizer (`tokenizePresentationArgs`), used only by the seven Presentation directive families, and explicitly states this is never a generic cross-directive lexer — confirmed directly: `@if`/`@elseif`/`@when`, `@set`, `@goto`/`@variant`/`@scene`, and `@choice` each already use their own independent argument-text handling and never call `tokenizePresentationArgs`. Since Dialogue is not a Presentation directive (Section 32.12), `@say`'s `speaker=` header is likewise **not** parsed by `tokenizePresentationArgs` and gains no quoting capability from it. `@say` instead uses its own small, Dialogue-owned header scanner for its single `speaker` parameter (Section 32.6) — a separate function, not an extension of the Presentation argument tokenizer's locked scope.
@@ -3772,6 +3774,8 @@ No new diagnostic code is allocated for Dialogue in v0.3.0. Existing families ar
 | Dialogue content resolves to a `HeadingNode` (Section 32.10) | `AT1301` |
 
 `AT1301`'s documented meaning (Section 16) is widened, additively, from "malformed presentation directive" to "malformed presentation directive, or malformed Dialogue (`@say`) directive" — the same one-code-many-reasons convention already established for `AT1301`/`AT1302` elsewhere in this document (Section 14), distinguished by diagnostic reason text, not by code number. This section does not prescribe every final diagnostic message.
+
+**Malformed-`@say` recovery (LOCKED).** Whenever a line is recognized as a `@say` header by directive name — regardless of whether its `speaker` parameter later proves missing, empty, or otherwise malformed — the Dialogue parser always performs Section 32.3's body-boundary scan first, exactly as it would for a valid header, to determine the complete physical extent of the attempted Dialogue block (the header line through the determined body boundary). If the header is malformed (this section) **or** the body fails Section 32.9's cardinality rule, no `DialogueNode` is produced, and the **entire determined extent — the header line and every body line the scan claimed — is dropped together**, not partially recovered. In particular, for `@say speaker=\nHello.`: the scan claims `Hello.` as the attempted body exactly as it would for a valid header; the header's empty `speaker` then makes the whole block malformed; `Hello.` is therefore dropped along with the header and does **not** fall back to becoming ordinary narration. This is the one recovery rule for every malformed-`@say` case in the table above — there is no case in v0.3.0 where a line physically consumed by `@say`'s body-boundary scan is returned to ordinary prose parsing once that `@say` has been determined to be malformed.
 
 ## 32.12 Compiler AST
 
@@ -3843,7 +3847,7 @@ No `currentSpeaker`, `previousSpeaker`, or `dialogueHistory` field is added to `
 
 ## 32.18 Player Semantics
 
-Player owns no separate Dialogue model. Player continues to expose Runtime's `ExecutionResult` through `PlayerState.current` unchanged (Section 18.3, "No Separate PlayerView Model"); no new Player state-machine semantics are introduced. Player may re-export `DialogueResult` consistent with its existing policy of re-exporting Runtime result types individually (Section 32.28).
+Player owns no separate Dialogue model. Player continues to expose Runtime's `ExecutionResult` through `PlayerState.current` unchanged (Section 18.3, "No Separate PlayerView Model"); no new Player state-machine semantics are introduced. Player re-exports `DialogueResult` — this is required, not optional, consistent with its existing, established policy of re-exporting every Runtime result type individually, and is exactly what necessitates the Player API-baseline change already locked in Sections 32.28, 32.30, and 32.31.
 
 ## 32.19 Progression Semantics
 
@@ -3968,7 +3972,7 @@ No package version is bumped as part of either implementation slice (Section 32.
 
 ## 32.32 Tests Required by the Locked Contract
 
-Compiler coverage should include at least: single Dialogue; Markdown content (emphasis/strong/inline code/links); multiline content; missing speaker; empty speaker; speaker containing whitespace (confirmed unsupported, Section 32.7); missing content; multiple-paragraph content rejection (Section 32.9); heading-as-content rejection (Section 32.10); misplaced `@say` inside a `@choice` body (AT1009).
+Compiler coverage should include at least: single Dialogue; Markdown content (emphasis/strong/inline code/links); multiline content (two lines of the same paragraph, no blank line between them); duplicate `speaker=` last-occurrence-wins (Section 32.6); missing speaker; empty speaker; speaker containing whitespace (confirmed unsupported, Section 32.7); missing content; multi-block content rejection via a no-blank-line paragraph interruption — for example an ATX heading appearing immediately after the dialogue line with no blank line between them (Section 32.9) — not via a blank-line-separated second paragraph, which Section 32.3's boundary excludes from the body entirely; heading-as-sole-content rejection (Section 32.10); misplaced `@say` inside a `@choice` body (AT1009); malformed-header recovery dropping its claimed body rather than yielding it as narration (Section 32.11); Dialogue immediately followed by narration in the same scene, with no intervening directive (Section 32.3).
 
 Runtime coverage should include at least: a single Dialogue result; two consecutive Dialogue blocks; Dialogue between narration; Dialogue after a Presentation command; Dialogue before a Choice; scene navigation; Restart/new-session behavior if relevant.
 
