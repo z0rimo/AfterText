@@ -1331,6 +1331,7 @@ A scene visit represents one **scene-entry episode**: the span from arriving at 
 * `content`
 * `presentation`
 * `choice`
+* `dialogue` (Section 32.16 — additive as of v0.3.0; qualifies identically to `content`, since Dialogue is observable narrative content with the same exposure semantics, Section 32.15)
 
 or an immediate `completed` if the scene (or its remaining automatic-only content) produces nothing else first. It does **not** fire for `navigation`, a runtime error, or automatic work alone (`@set` execution, Conditional resolution, Variant resolution) — none of these are, by themselves, something the reader observed.
 
@@ -1349,8 +1350,9 @@ Resolving a Variant selects a branch; that alone is not reader experience. A par
 * `content`
 * `presentation`
 * `choice`
+* `dialogue` (Section 32.16 — additive as of v0.3.0; qualifies identically to `content`, Section 32.15)
 
-**from inside that selected branch**, including from a construct nested within it (e.g. a Conditional, or another Variant, inside the branch). Unlike the scene rule above, `completed` is **not** extended to Variants by symmetry, and automatic-only work never qualifies: `navigation`, `completed`, and automatic work with no further observable output (`@set`/Conditional/Variant resolution) never count as Variant experience, even when that automatic work is the branch's entire content. A branch containing only automatic work that falls through to sibling content, or that runs to the end of the scene and reaches `completed`, is therefore **not** recorded as seen — recording requires an actual `content`/`presentation`/`choice` result attributable to the branch.
+**from inside that selected branch**, including from a construct nested within it (e.g. a Conditional, or another Variant, inside the branch). Unlike the scene rule above, `completed` is **not** extended to Variants by symmetry, and automatic-only work never qualifies: `navigation`, `completed`, and automatic work with no further observable output (`@set`/Conditional/Variant resolution) never count as Variant experience, even when that automatic work is the branch's entire content. A branch containing only automatic work that falls through to sibling content, or that runs to the end of the scene and reaches `completed`, is therefore **not** recorded as seen — recording requires an actual `content`/`presentation`/`choice`/`dialogue` result attributable to the branch.
 
 A later, independent resolution of the same Variant — to the same branch or a different one — is a new occurrence and may increment `seenCount` again.
 
@@ -3839,6 +3841,8 @@ These boundaries hold identically under `\n` and `\r\n` source; no line-ending-s
 
 Dialogue is an observable suspension/result, exactly like narrative content. One Dialogue block consumes one Runtime block, produces one Dialogue result, and requires one ordinary user advance. No callback, no asynchronous operation, no timed behavior, and no automatic continuation are introduced.
 
+**Reader Memory exposure (LOCKED).** A `dialogue` result qualifies as reader exposure identically to a `content` result for both the Scene visit rule and the Variant-seen rule (Section 17.9, whose two exhaustive qualifying-result lists are additively widened to include `dialogue`). A scene or Variant branch whose first (or only) observable output is Dialogue is recorded as visited/seen exactly as it would be for narration — there is no separate Dialogue-specific Reader Memory concept, and `advance()`'s existing recording logic requires no new field or state, only the same additive `ExecutionResult` widening already locked in Section 32.16.
+
 ## 32.16 Runtime Result
 
 ```ts
@@ -3988,7 +3992,7 @@ No package version is bumped as part of either implementation slice (Section 32.
 
 Compiler coverage should include at least: single Dialogue; Markdown content (emphasis/strong/inline code/links); multiline content (two lines of the same paragraph, no blank line between them); duplicate `speaker=` last-occurrence-wins (Section 32.6); missing speaker; empty speaker; speaker containing whitespace (confirmed unsupported, Section 32.7); missing content; multi-block content rejection via a no-blank-line paragraph interruption — for example an ATX heading appearing immediately after the dialogue line with no blank line between them (Section 32.9) — not via a blank-line-separated second paragraph, which Section 32.3's boundary excludes from the body entirely; heading-as-sole-content rejection (Section 32.10); misplaced `@say` inside a `@choice` body (AT1009); malformed-header recovery dropping its claimed body rather than yielding it as narration (Section 32.11); an unquoted multi-word speaker attempt (`@say speaker=Dr. Smith`) rejected as an unsupported leftover header token rather than truncated to `Dr.` (Section 32.6); Dialogue immediately followed by narration in the same scene, with no intervening directive (Section 32.3); exact `span`/`speakerSourceSpan`/`contentSourceSpan` source-slice and position assertions under both `\n` and `\r\n` source, confirming `span`'s contiguous-range coverage of any interior leading-blank-line trivia (the canonical blank-line form) versus `contentSourceSpan`'s exact exclusion of that same trivia, and confirming the terminating blank line is excluded from both (Section 32.14).
 
-Runtime coverage should include at least: a single Dialogue result; two consecutive Dialogue blocks; Dialogue between narration; Dialogue after a Presentation command; Dialogue before a Choice; scene navigation; Restart/new-session behavior if relevant.
+Runtime coverage should include at least: a single Dialogue result; two consecutive Dialogue blocks; Dialogue between narration; Dialogue after a Presentation command; Dialogue before a Choice; scene navigation; Restart/new-session behavior if relevant; a scene whose first observable result is Dialogue recording a scene visit (`recordSceneVisit`, Section 17.9/32.15); a Variant branch whose first observable result is Dialogue recording that occurrence as seen (`recordVariantSeen`, Section 17.9/32.15).
 
 Renderer coverage should include at least: speaker visibly rendered; speaker case preserved verbatim; Markdown body rendered; Next advances; two consecutive Dialogue results; Dialogue rendered independent of Sprite state (Section 32.20–32.21).
 
