@@ -293,6 +293,18 @@ describe("@say", () => {
     }
   });
 
+  it("a line of other Unicode whitespace (e.g. U+00A0) is NOT blank, and never terminates or precedes the body (Section 32.3)", () => {
+    // Deliberately not `.trim()` (which also strips U+00A0): a non-breaking-
+    // space-only line is non-blank Markdown content, so it stays inside the
+    // one continuous Dialogue body rather than splitting it into a second,
+    // malformed paragraph or acting as leading trivia.
+    const nbsp = " ";
+    const { document } = compileOk(`@scene s\n@say speaker=Alice\nHello.\n${nbsp}\nWorld.\n`);
+    const blocks = document.scenes[0]!.blocks;
+    expect(blocks).toHaveLength(1);
+    expect(blocks[0]!.type).toBe("Dialogue");
+  });
+
   it("two consecutive Dialogue blocks parse independently", () => {
     const { document } = compileOk("@scene s\n@say speaker=Alice\nHi.\n@say speaker=Bob\nHey.\n");
     const blocks = document.scenes[0]!.blocks;

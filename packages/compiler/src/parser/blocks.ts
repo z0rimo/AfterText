@@ -803,9 +803,10 @@ function parseDialogueHeader(
   };
 }
 
-/** True for a zero-length or whitespace-only line (docs/CORE_SPEC.md Section 32.3's blank-line predicate — the same definition the Markdown pipeline itself uses for paragraph breaks, matching the existing `parseProseRun`/`parseChoice` convention). */
+/** A zero-length line, or a line containing only spaces and/or tabs (docs/CORE_SPEC.md Section 32.3's exact blank-line predicate). Deliberately `/^[ \t]*$/`, not `.trim()`: `String.prototype.trim()` also strips other Unicode whitespace (e.g. U+00A0, U+2028/U+2029) that Section 32.3 does not — a line containing only such characters must remain non-blank Markdown content, not leading trivia or a body terminator. */
+const BLANK_LINE_PATTERN = /^[ \t]*$/;
 function isBlankLine(line: SourceLine): boolean {
-  return line.text.trim().length === 0;
+  return BLANK_LINE_PATTERN.test(line.text);
 }
 
 /**
