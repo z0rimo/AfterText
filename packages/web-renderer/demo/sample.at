@@ -38,6 +38,34 @@ A closer look confirms it.
 
 The key turns smoothly. The door swings open onto a long stone hallway.
 
+@sprite show id=alice image=alice-neutral.svg position=left
+
+A figure waits at the end of the hall.
+
+@sprite show id=bob image=bob.svg position=right
+
+A second figure steps up beside her.
+
+@camera zoom to=1.2 duration=600ms
+
+@sprite show id=alice image=alice-smile.svg position=left
+
+She smiles when she notices the key in your hand.
+
+@sprite show id=alice image=alice-smile.svg position=center
+
+She steps closer.
+
+@camera zoom to=1
+
+@sprite hide id=bob
+
+He steps back, out of sight.
+
+@sprite show id=bob image=bob.svg position=right
+
+A moment later he reappears.
+
 Ahead, daylight spills in from an open archway.
 
 @goto ending
