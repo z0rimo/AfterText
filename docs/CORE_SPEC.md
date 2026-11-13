@@ -3765,15 +3765,15 @@ This uses the existing malformed-directive diagnostic family (Section 32.11); th
 
 No new diagnostic code is allocated for Dialogue in v0.3.0. Existing families are reused, exactly as already extended once for Sprite Stage's own malformed shapes (Section 31.18):
 
-| Case | Code |
-|---|---|
-| Unknown directive typo (e.g. `@sya`) | `AT1001` (unchanged) |
-| `@say` appearing where only a terminator/bullet directive is valid (e.g. inside a `@choice` body) | `AT1009` (unchanged — already directive-agnostic by its existing "any directive line inside a `@choice` body" clause) |
-| Missing or empty `speaker` (Section 32.6) | `AT1301` |
-| An unsupported header token — a named parameter other than `speaker`, or any bare/non-`key=value` token, including a leftover from an unquoted or quoted multi-word speaker attempt (Section 32.6) | `AT1301` |
-| Missing Dialogue content (Section 32.9) | `AT1301` |
-| Dialogue content resolves to more than one block (Section 32.9) | `AT1301` |
-| Dialogue content resolves to a `HeadingNode` (Section 32.10) | `AT1301` |
+| Case | Code | Diagnostic Span |
+|---|---|---|
+| Unknown directive typo (e.g. `@sya`) | `AT1001` (unchanged) | the directive line (existing `AT1001` convention) |
+| `@say` appearing where only a terminator/bullet directive is valid (e.g. inside a `@choice` body) | `AT1009` (unchanged — already directive-agnostic by its existing "any directive line inside a `@choice` body" clause) | the directive line (existing `AT1009` convention) |
+| Missing or empty `speaker` (Section 32.6) | `AT1301` | the complete `@say` header line |
+| An unsupported header token — a named parameter other than `speaker`, or any bare/non-`key=value` token, including a leftover from an unquoted or quoted multi-word speaker attempt (Section 32.6) | `AT1301` | the offending token's own range within the header line |
+| Missing Dialogue content (Section 32.9) | `AT1301` | zero-width, immediately after the end of the `@say` header line's own content (the same zero-width convention already used by `AT1008`) |
+| Dialogue content resolves to more than one block (Section 32.9) | `AT1301` | the complete claimed body extent — from the start of the first claimed body line through the end of the last claimed body line |
+| Dialogue content resolves to a `HeadingNode` (Section 32.10) | `AT1301` | the `HeadingNode`'s own span |
 
 `AT1301`'s documented meaning (Section 16) is widened, additively, from "malformed presentation directive" to "malformed presentation directive, or malformed Dialogue (`@say`) directive" — the same one-code-many-reasons convention already established for `AT1301`/`AT1302` elsewhere in this document (Section 14), distinguished by diagnostic reason text, not by code number. This section does not prescribe every final diagnostic message.
 
@@ -3823,7 +3823,13 @@ contentSourceSpan  — covers the authored Dialogue prose body, equal to the lif
 
 No `parameterValueSpans`, `commandRemovalSpan`, `characterSourceSpan`, or `voiceSourceSpan` is added for v0.3.0 — Dialogue has exactly one named header parameter, so these two purpose-specific spans are sufficient without the generic per-parameter source-tooling machinery introduced for multi-parameter Presentation directives (Section 14, Section 25.36). Since v0.3.0 speaker values are never quoted (Section 32.7), `speakerSourceSpan` always covers the unquoted authored value text directly, with no quote-delimiter inclusion/exclusion question to resolve; no Dialogue-specific span convention is introduced.
 
-**Exact boundaries (LOCKED).** All three fields use the same absolute raw-source `SourceSpan`/`SourcePosition` convention as every other span in the compiler — UTF-16-safe, CRLF-safe, frontmatter-safe (Section 25) — no new offset model. `span` starts at the `@say` header line's own start and ends at the end of the last body line actually claimed by Section 32.3's boundary scan; it never includes any leading blank line skipped by that scan, and never includes the terminating blank line (or its line terminator) that ends the body. `contentSourceSpan` equals the lifted `ParagraphNode`'s own span over exactly the claimed body lines — never extended to cover a skipped leading blank line or the terminating blank line either. These boundaries hold identically under `\n` and `\r\n` source; no line-ending-specific exception exists for any of the three fields.
+**Exact boundaries (LOCKED).** All three fields use the same absolute raw-source `SourceSpan`/`SourcePosition` convention as every other span in the compiler — UTF-16-safe, CRLF-safe, frontmatter-safe (Section 25) — no new offset model.
+
+`span` is one contiguous range from the `@say` header line's own start through the end of the last body line actually claimed by Section 32.3's boundary scan. Because a `SourceSpan` is a single contiguous `{start, end}` range, `span` necessarily spans across any leading blank line physically located between the header and the body (e.g. the canonical blank-line form in Section 32.2) — this is ordinary, expected `SourceSpan` behavior, not a contradiction, and is identical in kind to how other multi-line constructs' `span` fields already cover their own interior trivia. What `span` never does is extend past the body it actually claimed: `span.end` is always the end of the last claimed body line, never reaching into the terminating blank line (or its line terminator) that ends the body per Section 32.3 — that line was never claimed, so `span` never covers it.
+
+`speakerSourceSpan` and `contentSourceSpan` are both narrower, exact spans, independent of whatever interior trivia `span` itself may contiguously cover. `contentSourceSpan` equals the lifted `ParagraphNode`'s own span over exactly the claimed body lines: it excludes any leading blank line between the header and the body (those lines were skipped before Markdown parsing ever ran on the remaining text) and excludes the terminating blank line. `speakerSourceSpan` is unaffected by any of this — it covers only the authored speaker value text (Section 32.6).
+
+These boundaries hold identically under `\n` and `\r\n` source; no line-ending-specific exception exists for any of the three fields.
 
 ## 32.15 Runtime Semantics
 
@@ -3976,7 +3982,7 @@ No package version is bumped as part of either implementation slice (Section 32.
 
 ## 32.32 Tests Required by the Locked Contract
 
-Compiler coverage should include at least: single Dialogue; Markdown content (emphasis/strong/inline code/links); multiline content (two lines of the same paragraph, no blank line between them); duplicate `speaker=` last-occurrence-wins (Section 32.6); missing speaker; empty speaker; speaker containing whitespace (confirmed unsupported, Section 32.7); missing content; multi-block content rejection via a no-blank-line paragraph interruption — for example an ATX heading appearing immediately after the dialogue line with no blank line between them (Section 32.9) — not via a blank-line-separated second paragraph, which Section 32.3's boundary excludes from the body entirely; heading-as-sole-content rejection (Section 32.10); misplaced `@say` inside a `@choice` body (AT1009); malformed-header recovery dropping its claimed body rather than yielding it as narration (Section 32.11); an unquoted multi-word speaker attempt (`@say speaker=Dr. Smith`) rejected as an unsupported leftover header token rather than truncated to `Dr.` (Section 32.6); Dialogue immediately followed by narration in the same scene, with no intervening directive (Section 32.3); exact `span`/`speakerSourceSpan`/`contentSourceSpan` source-slice and position assertions under both `\n` and `\r\n` source, confirming a skipped leading blank line and the terminating blank line are excluded from every span (Section 32.14).
+Compiler coverage should include at least: single Dialogue; Markdown content (emphasis/strong/inline code/links); multiline content (two lines of the same paragraph, no blank line between them); duplicate `speaker=` last-occurrence-wins (Section 32.6); missing speaker; empty speaker; speaker containing whitespace (confirmed unsupported, Section 32.7); missing content; multi-block content rejection via a no-blank-line paragraph interruption — for example an ATX heading appearing immediately after the dialogue line with no blank line between them (Section 32.9) — not via a blank-line-separated second paragraph, which Section 32.3's boundary excludes from the body entirely; heading-as-sole-content rejection (Section 32.10); misplaced `@say` inside a `@choice` body (AT1009); malformed-header recovery dropping its claimed body rather than yielding it as narration (Section 32.11); an unquoted multi-word speaker attempt (`@say speaker=Dr. Smith`) rejected as an unsupported leftover header token rather than truncated to `Dr.` (Section 32.6); Dialogue immediately followed by narration in the same scene, with no intervening directive (Section 32.3); exact `span`/`speakerSourceSpan`/`contentSourceSpan` source-slice and position assertions under both `\n` and `\r\n` source, confirming `span`'s contiguous-range coverage of any interior leading-blank-line trivia (the canonical blank-line form) versus `contentSourceSpan`'s exact exclusion of that same trivia, and confirming the terminating blank line is excluded from both (Section 32.14).
 
 Runtime coverage should include at least: a single Dialogue result; two consecutive Dialogue blocks; Dialogue between narration; Dialogue after a Presentation command; Dialogue before a Choice; scene navigation; Restart/new-session behavior if relevant.
 
