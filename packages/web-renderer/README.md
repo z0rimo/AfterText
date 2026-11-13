@@ -35,6 +35,18 @@ export function Story() {
 The renderer owns presentation only. Compilation and diagnostics remain the
 host application's responsibility.
 
+## Demo
+
+```sh
+cd packages/web-renderer
+npm run dev
+```
+
+Opens a local Vite dev server running a small sample story that exercises
+every implemented Presentation feature — Background, Layer, Camera, Music,
+Sfx, Pause, Choice, and Sprite Stage — through the real compiler and
+`AfterTextPlayer`.
+
 ## License
 
 MIT

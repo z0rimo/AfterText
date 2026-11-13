@@ -6,6 +6,9 @@ import sampleSource from "./sample.at?raw";
 import stoneRoomUrl from "./assets/stone-room.svg";
 import hallwayUrl from "./assets/hallway.svg";
 import brassKeyUrl from "./assets/brass-key.svg";
+import aliceNeutralUrl from "./assets/alice-neutral.svg";
+import aliceSmileUrl from "./assets/alice-smile.svg";
+import bobUrl from "./assets/bob.svg";
 import "./demo.css";
 
 // Compiling AfterText source belongs to this demo application, never to
@@ -32,6 +35,9 @@ const assets: Record<string, string> = {
   "stone-room.svg": stoneRoomUrl,
   "hallway.svg": hallwayUrl,
   "brass-key.svg": brassKeyUrl,
+  "alice-neutral.svg": aliceNeutralUrl,
+  "alice-smile.svg": aliceSmileUrl,
+  "bob.svg": bobUrl,
   "hallway-theme.mp3": HALLWAY_THEME_WAV,
   "key-pickup.wav": KEY_PICKUP_WAV
 };
