@@ -869,10 +869,14 @@ function parseDialogue(
   }
 
   if (blocks.length > 1) {
+    // The complete claimed body extent (Section 32.11) is the physical
+    // bodyLines range, not the first/last parsed block's own span — a
+    // parsed block's span can start after leading indentation, which would
+    // otherwise silently exclude claimed body trivia from the diagnostic.
     diagnostics.push(
       Diagnostics.malformedDialogue("dialogue content must be a single paragraph", {
-        start: (blocks[0] as StoryBlock).span.start,
-        end: (blocks.at(-1) as StoryBlock).span.end
+        start: lineStart(first),
+        end: lineEnd(bodyLines.at(-1) as SourceLine)
       })
     );
     return { block: undefined, nextIndex: bodyEnd };

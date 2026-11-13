@@ -267,6 +267,17 @@ describe("@say", () => {
     expect(result.document.scenes[0]!.blocks.some((b) => b.type === "Dialogue")).toBe(false);
   });
 
+  it("the 2+ blocks diagnostic span covers the complete physical body extent, including leading indentation", () => {
+    // The parsed Paragraph's own span starts after "   " (indentation
+    // Markdown strips), but the diagnostic must cover the full claimed
+    // body lines (Section 32.11), not just the parsed block's narrower span.
+    const source = "@scene s\n@say speaker=Alice\n   Hello.\n# Interrupt\n";
+    const result = compile(source);
+    expect(result.diagnostics).toHaveLength(1);
+    const span = result.diagnostics[0]!.span;
+    expect(source.slice(span.start.offset, span.end.offset)).toBe("   Hello.\n# Interrupt");
+  });
+
   it("reports missing content at EOF", () => {
     const result = compile("@scene s\n@say speaker=Alice\n");
     expect(codesOf(result.diagnostics)).toContain("AT1301");
