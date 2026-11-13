@@ -41,6 +41,7 @@ export type {
   StoryMetadata,
   ParagraphNode,
   HeadingNode,
+  DialogueNode,
   PresentationNode,
   SetNode,
   GotoNode,

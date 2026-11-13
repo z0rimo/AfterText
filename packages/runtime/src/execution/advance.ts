@@ -172,6 +172,12 @@ export function advance(
         return commit(frames, { type: "presentation", command: block.command });
       }
 
+      case "Dialogue": {
+        frames = withNextIndex(frames);
+        frames = recordObservableExposure(frames);
+        return commit(frames, { type: "dialogue", speaker: block.speaker, content: block.content });
+      }
+
       case "Set": {
         if (budget <= 0) return commit(frames, { type: "error", error: RuntimeErrors.stepLimitExceeded() });
         budget -= 1; // charge: "a @set evaluation"

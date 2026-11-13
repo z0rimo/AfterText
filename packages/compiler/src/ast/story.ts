@@ -65,6 +65,21 @@ export interface HeadingNode {
 }
 
 // ---------------------------------------------------------------------------
+// Dialogue: @say
+// ---------------------------------------------------------------------------
+
+export interface DialogueNode {
+  readonly type: "Dialogue";
+  readonly speaker: string;
+  readonly content: readonly InlineNode[];
+  readonly span: SourceSpan;
+  /** Exact authored speaker value characters, excluding `speaker=` and surrounding whitespace. */
+  readonly speakerSourceSpan: SourceSpan;
+  /** Equal to the lifted body ParagraphNode's own span (docs/CORE_SPEC.md Section 32.14). */
+  readonly contentSourceSpan: SourceSpan;
+}
+
+// ---------------------------------------------------------------------------
 // Simple presentation directives: @background, @layer, @camera, @music,
 // @sfx, @pause. The directive is parsed, validated, and normalized (units,
 // numeric params) into a typed PresentationCommand at compile time — see
@@ -367,6 +382,7 @@ export interface VariantNode {
 export type StoryBlock =
   | ParagraphNode
   | HeadingNode
+  | DialogueNode
   | PresentationNode
   | SetNode
   | GotoNode

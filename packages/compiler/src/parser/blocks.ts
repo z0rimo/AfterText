@@ -7,6 +7,7 @@ import type {
   ConditionalBranch,
   ConditionalBranchKind,
   ConditionalNode,
+  DialogueNode,
   GotoNode,
   PresentationNode,
   SceneNode,
@@ -707,6 +708,201 @@ function parseSet(
   }
 }
 
+// ---------------------------------------------------------------------------
+// Dialogue: @say
+// ---------------------------------------------------------------------------
+
+/**
+ * Recognizes a Dialogue header token (docs/CORE_SPEC.md Section 32.6).
+ * Deliberately `(.*)` rather than Presentation's `(.+)` (`PARAM_TOKEN_PATTERN`
+ * above): `speaker=` with nothing after it must still be recognized as *the*
+ * speaker token, with an empty value, so it is diagnosed as "missing/empty
+ * speaker" (category 1) rather than falling through to "unsupported header
+ * token" (category 2) — Section 32.11's locked diagnostic precedence.
+ */
+const SAY_SPEAKER_TOKEN_PATTERN = /^speaker=(.*)$/;
+const SAY_SPEAKER_PREFIX_LENGTH = "speaker=".length;
+
+interface DialogueHeaderResult {
+  readonly ok: boolean;
+  readonly speaker: string;
+  readonly speakerSourceSpan: SourceSpan | undefined;
+}
+
+/**
+ * Parses `@say`'s header argument text (docs/CORE_SPEC.md Section 32.6/32.7).
+ * A small, Dialogue-local scanner — deliberately NOT `tokenizePresentationArgs`,
+ * which Section 14 locks to the seven Presentation directive families only
+ * and which Dialogue (not a PresentationCommand, Section 32.12) must not
+ * extend. Reuses only the shared `SEPARATOR_WHITESPACE_PATTERN` token-boundary
+ * primitive both already rely on. `@say` has no positional-argument token at
+ * all (Section 32.6): every token must be `speaker=...`-shaped, or the whole
+ * header is malformed. A duplicate `speaker=` is not an error — the last
+ * occurrence wins for both the semantic value and `speakerSourceSpan`
+ * (Section 32.6).
+ */
+function parseDialogueHeader(
+  directive: ParsedDirectiveLine,
+  line: SourceLine,
+  diagnostics: Diagnostic[]
+): DialogueHeaderResult {
+  const argsText = directive.args;
+
+  let speakerValue: string | undefined;
+  let speakerValueStart = -1;
+  let speakerValueEnd = -1;
+  let unsupportedToken: ArgsTextRange | undefined;
+
+  let pos = 0;
+  while (pos < argsText.length) {
+    while (pos < argsText.length && SEPARATOR_WHITESPACE_PATTERN.test(argsText[pos] as string)) pos += 1;
+    if (pos >= argsText.length) break;
+    const tokenStart = pos;
+    while (pos < argsText.length && !SEPARATOR_WHITESPACE_PATTERN.test(argsText[pos] as string)) pos += 1;
+    const tokenEnd = pos;
+
+    const match = SAY_SPEAKER_TOKEN_PATTERN.exec(argsText.slice(tokenStart, tokenEnd));
+    if (match) {
+      // Last-occurrence-wins (docs/CORE_SPEC.md Section 32.6), mirroring the
+      // compiler's existing duplicate-named-parameter convention (Section 14).
+      speakerValue = match[1] as string;
+      speakerValueStart = tokenStart + SAY_SPEAKER_PREFIX_LENGTH;
+      speakerValueEnd = tokenEnd;
+    } else {
+      // First unsupported token only — Section 32.11's diagnostic precedence
+      // reports at most one AT1301 per malformed `@say`, so later unsupported
+      // tokens (if any) are never separately diagnosed.
+      unsupportedToken ??= { start: tokenStart, end: tokenEnd };
+    }
+  }
+
+  // Category 1 (missing/empty speaker) takes precedence over category 2
+  // (unsupported header token) regardless of token order — Section 32.11.
+  if (speakerValue === undefined || speakerValue.trim().length === 0) {
+    diagnostics.push(Diagnostics.malformedDialogue("missing or empty speaker", spanOf(line)));
+    return { ok: false, speaker: "", speakerSourceSpan: undefined };
+  }
+
+  if (unsupportedToken) {
+    diagnostics.push(
+      Diagnostics.malformedDialogue("unsupported header token", {
+        start: positionAt(line, directive.argsStartColumn + unsupportedToken.start),
+        end: positionAt(line, directive.argsStartColumn + unsupportedToken.end)
+      })
+    );
+    return { ok: false, speaker: "", speakerSourceSpan: undefined };
+  }
+
+  return {
+    ok: true,
+    speaker: speakerValue,
+    speakerSourceSpan: {
+      start: positionAt(line, directive.argsStartColumn + speakerValueStart),
+      end: positionAt(line, directive.argsStartColumn + speakerValueEnd)
+    }
+  };
+}
+
+/** A zero-length line, or a line containing only spaces and/or tabs (docs/CORE_SPEC.md Section 32.3's exact blank-line predicate). Deliberately `/^[ \t]*$/`, not `.trim()`: `String.prototype.trim()` also strips other Unicode whitespace (e.g. U+00A0, U+2028/U+2029) that Section 32.3 does not — a line containing only such characters must remain non-blank Markdown content, not leading trivia or a body terminator. */
+const BLANK_LINE_PATTERN = /^[ \t]*$/;
+function isBlankLine(line: SourceLine): boolean {
+  return BLANK_LINE_PATTERN.test(line.text);
+}
+
+/**
+ * Parses one Dialogue block starting at the `@say` header line at `openIndex`
+ * (docs/CORE_SPEC.md Section 32). Body-boundary scan (Section 32.3) always
+ * runs, even when the header is malformed, so recovery is deterministic
+ * (Section 32.11): the complete claimed extent — header plus every scanned
+ * body line — is dropped together on any failure; the terminating blank
+ * line, directive line, `@scene`, or EOF is never consumed.
+ */
+function parseDialogue(
+  lines: readonly SourceLine[],
+  openIndex: number,
+  diagnostics: Diagnostic[]
+): { block: DialogueNode | undefined; nextIndex: number } {
+  const headerLine = lines[openIndex] as SourceLine;
+  const directive = matchDirectiveLine(headerLine.text) as ParsedDirectiveLine;
+  const header = parseDialogueHeader(directive, headerLine, diagnostics);
+
+  let i = openIndex + 1;
+  while (i < lines.length && isBlankLine(lines[i] as SourceLine)) i += 1; // leading trivia (Section 32.3 step 1)
+  const bodyStart = i;
+  while (
+    i < lines.length &&
+    !isBlankLine(lines[i] as SourceLine) &&
+    !matchDirectiveLine((lines[i] as SourceLine).text) // a directive line, @scene included, ends the body
+  ) {
+    i += 1;
+  }
+  const bodyEnd = i;
+
+  if (!header.ok) {
+    return { block: undefined, nextIndex: bodyEnd };
+  }
+
+  if (bodyStart === bodyEnd) {
+    const headerEnd = lineEnd(headerLine);
+    diagnostics.push(Diagnostics.malformedDialogue("missing dialogue content", { start: headerEnd, end: headerEnd }));
+    return { block: undefined, nextIndex: bodyEnd };
+  }
+
+  const bodyLines = lines.slice(bodyStart, bodyEnd);
+  const first = bodyLines[0] as SourceLine;
+  const text = joinLineText(bodyLines);
+  // Buffered, not pushed to `diagnostics` directly: `parseProseChunk` can
+  // emit its own warnings (e.g. AT3001 for an unsupported construct falling
+  // back to plain text) as a side effect of parsing, independently of
+  // whether the resulting blocks even satisfy Dialogue's cardinality rule.
+  // Section 32.11 locks exactly one diagnostic per malformed `@say` — so
+  // these are discarded on every malformed-body path below and merged into
+  // `diagnostics` only once the body is confirmed to be a valid single
+  // Paragraph.
+  const bodyDiagnostics: Diagnostic[] = [];
+  const blocks = parseProseChunk(text, { startLine: first.number, startOffset: first.startOffset }, bodyDiagnostics);
+
+  if (blocks.length === 0) {
+    const headerEnd = lineEnd(headerLine);
+    diagnostics.push(Diagnostics.malformedDialogue("missing dialogue content", { start: headerEnd, end: headerEnd }));
+    return { block: undefined, nextIndex: bodyEnd };
+  }
+
+  if (blocks.length > 1) {
+    // The complete claimed body extent (Section 32.11) is the physical
+    // bodyLines range, not the first/last parsed block's own span — a
+    // parsed block's span can start after leading indentation, which would
+    // otherwise silently exclude claimed body trivia from the diagnostic.
+    diagnostics.push(
+      Diagnostics.malformedDialogue("dialogue content must be a single paragraph", {
+        start: lineStart(first),
+        end: lineEnd(bodyLines.at(-1) as SourceLine)
+      })
+    );
+    return { block: undefined, nextIndex: bodyEnd };
+  }
+
+  const only = blocks[0] as StoryBlock;
+  if (only.type !== "Paragraph") {
+    diagnostics.push(Diagnostics.malformedDialogue("dialogue content must be a paragraph, not a heading", only.span));
+    return { block: undefined, nextIndex: bodyEnd };
+  }
+
+  for (const diagnostic of bodyDiagnostics) diagnostics.push(diagnostic);
+
+  return {
+    block: {
+      type: "Dialogue",
+      speaker: header.speaker,
+      content: only.children,
+      span: { start: lineStart(headerLine), end: only.span.end },
+      speakerSourceSpan: header.speakerSourceSpan as SourceSpan,
+      contentSourceSpan: only.span
+    },
+    nextIndex: bodyEnd
+  };
+}
+
 /** Bullet marker introducing a choice item: `* ...` or `- ...`. */
 const CHOICE_BULLET_PATTERN = /^(\s*)[*-]\s+/;
 
@@ -1174,6 +1370,8 @@ function parseDirectiveBlock(
       };
       return single(node);
     }
+    case "say":
+      return parseDialogue(lines, index, diagnostics);
     case "if":
     case "variant":
       if (depth >= MAX_BLOCK_DEPTH) {

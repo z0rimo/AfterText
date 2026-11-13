@@ -170,6 +170,17 @@
         "union \"warning\""
       ]
     },
+    "DialogueNode": {
+      "kind": "interface",
+      "members": [
+        "readonly property content: readonly InlineNode[]",
+        "readonly property contentSourceSpan: SourceSpan",
+        "readonly property span: SourceSpan",
+        "readonly property speaker: string",
+        "readonly property speakerSourceSpan: SourceSpan",
+        "readonly property type: \"Dialogue\""
+      ]
+    },
     "EmphasisInline": {
       "kind": "interface",
       "members": [
@@ -415,6 +426,7 @@
       "members": [
         "union ChoiceNode",
         "union ConditionalNode",
+        "union DialogueNode",
         "union GotoNode",
         "union HeadingNode",
         "union ParagraphNode",

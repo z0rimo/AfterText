@@ -1,4 +1,4 @@
-import type { HeadingNode, ParagraphNode, PresentationCommand } from "@aftertext/compiler";
+import type { HeadingNode, InlineNode, ParagraphNode, PresentationCommand } from "@aftertext/compiler";
 import type { RuntimeState } from "../state/runtime-state.js";
 import type { ExecutionCursor } from "./cursor.js";
 import type { RuntimeExecutionError } from "./errors.js";
@@ -22,6 +22,17 @@ export interface ContentResult {
 export interface PresentationResult {
   readonly type: "presentation";
   readonly command: PresentationCommand;
+}
+
+/**
+ * Deliberately flattened — not `{ type: "dialogue", block: DialogueNode }`
+ * (docs/CORE_SPEC.md Section 32.16, locked). `content` carries the lifted
+ * inline children directly, the same shape Section 32's own contract names.
+ */
+export interface DialogueResult {
+  readonly type: "dialogue";
+  readonly speaker: string;
+  readonly content: readonly InlineNode[];
 }
 
 export interface ChoiceResult {
@@ -52,6 +63,7 @@ export interface ErrorResult {
 export type ExecutionResult =
   | ContentResult
   | PresentationResult
+  | DialogueResult
   | ChoiceResult
   | NavigationResult
   | CompletedResult
