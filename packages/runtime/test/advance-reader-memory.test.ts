@@ -43,6 +43,13 @@ describe("Reader Memory — Scene visit", () => {
     expect(step.runtimeState.reader.visitedScenes).toEqual({ s: { visitCount: 1 } });
   });
 
+  it("Dialogue as the first observable result records visit", () => {
+    const { document, state } = freshState("@scene s\n@say speaker=Alice\nHi.\n");
+    const step = advance(document, state);
+    expect(step.result.type).toBe("dialogue");
+    expect(step.runtimeState.reader.visitedScenes).toEqual({ s: { visitCount: 1 } });
+  });
+
   it("an empty scene reaching completed records visit", () => {
     const { document, state } = freshState("");
     const step = advance(document, state);
@@ -191,6 +198,16 @@ describe("Reader Memory — Variant seen", () => {
     const { document, state } = freshState(source);
     const step = advance(document, withStory(state, { trust: 1 }));
     expect(step.result.type).toBe("choice");
+    expect(step.runtimeState.reader.seenVariants).toEqual({
+      mood: { firstSeenBranchId: "mood:0", lastSeenBranchId: "mood:0", seenCount: 1 }
+    });
+  });
+
+  it("Dialogue from the branch records the occurrence once", () => {
+    const source = ["@scene s", "@variant mood", "@when trust == 1", "@say speaker=Alice", "Hi.", "@end"].join("\n");
+    const { document, state } = freshState(source);
+    const step = advance(document, withStory(state, { trust: 1 }));
+    expect(step.result.type).toBe("dialogue");
     expect(step.runtimeState.reader.seenVariants).toEqual({
       mood: { firstSeenBranchId: "mood:0", lastSeenBranchId: "mood:0", seenCount: 1 }
     });

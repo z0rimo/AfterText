@@ -72,3 +72,18 @@ describe("end-to-end: compile -> createPlayer -> advancePlayer -> Choice -> sele
     expect(player.current).toEqual({ type: "completed" });
   });
 });
+
+describe("Dialogue — wiring proof through the Player Core public API", () => {
+  it("a real @say source produces a dialogue result via compile -> createPlayer -> advancePlayer", () => {
+    const result = compile("@scene start\n@say speaker=Alice\nHello there.\n");
+    expect(result.hasErrors).toBe(false);
+
+    let player = createPlayer(result.document);
+    player = advancePlayer(result.document, player);
+
+    expect(player.current?.type).toBe("dialogue");
+    if (player.current?.type === "dialogue") {
+      expect(player.current.speaker).toBe("Alice");
+    }
+  });
+});

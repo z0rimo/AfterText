@@ -137,6 +137,13 @@ export const Diagnostics = {
   malformedPresentation(reason: string, span: SourceSpan): Diagnostic {
     return diagnostic("error", "AT1301", `Malformed presentation directive: ${reason}`, span);
   },
+  // Dialogue (`@say`) is not a Presentation directive (docs/CORE_SPEC.md
+  // Section 32.12) — this sibling helper reuses AT1301's existing
+  // one-code-many-reasons convention (Section 32.11) without borrowing
+  // malformedPresentation's Presentation-specific wording.
+  malformedDialogue(reason: string, span: SourceSpan): Diagnostic {
+    return diagnostic("error", "AT1301", `Malformed dialogue directive: ${reason}`, span);
+  },
   presentationNumericNotFinite(span: SourceSpan): Diagnostic {
     return diagnostic(
       "error",

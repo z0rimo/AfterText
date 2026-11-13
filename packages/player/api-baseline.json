@@ -41,6 +41,14 @@
         "readonly property type: \"content\""
       ]
     },
+    "DialogueResult": {
+      "kind": "interface",
+      "members": [
+        "readonly property content: readonly InlineNode[]",
+        "readonly property speaker: string",
+        "readonly property type: \"dialogue\""
+      ]
+    },
     "ErrorResult": {
       "kind": "interface",
       "members": [
@@ -54,6 +62,7 @@
         "union ChoiceResult",
         "union CompletedResult",
         "union ContentResult",
+        "union DialogueResult",
         "union ErrorResult",
         "union NavigationResult",
         "union PresentationResult"
@@ -70,7 +79,7 @@
     "PlayerState": {
       "kind": "interface",
       "members": [
-        "readonly property current: ChoiceResult | CompletedResult | ContentResult | ErrorResult | NavigationResult | PresentationResult | null",
+        "readonly property current: ChoiceResult | CompletedResult | ContentResult | DialogueResult | ErrorResult | NavigationResult | PresentationResult | null",
         "readonly property cursor: ExecutionCursor",
         "readonly property runtimeState: RuntimeState"
       ]

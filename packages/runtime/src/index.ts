@@ -32,6 +32,7 @@ export type {
   AvailableChoiceItem,
   ContentResult,
   PresentationResult,
+  DialogueResult,
   ChoiceResult,
   NavigationResult,
   CompletedResult,

@@ -16,6 +16,7 @@ export const REGISTERED_DIRECTIVES = new Set<string>([
   ...SIMPLE_PRESENTATION_DIRECTIVES,
   "set",
   "goto",
+  "say",
   "if",
   "elseif",
   "else",
