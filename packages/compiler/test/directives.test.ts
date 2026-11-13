@@ -239,6 +239,22 @@ describe("@say", () => {
     expect(result.diagnostics[0]!.message).toContain("missing or empty speaker");
   });
 
+  it("suppresses Markdown parsing warnings (e.g. AT3001) when the body is rejected for cardinality", () => {
+    // A list immediately after the first line, no blank line between —
+    // interrupts the paragraph (2+ blocks) AND makes parseProseChunk itself
+    // emit an AT3001 fallback warning for the unsupported list construct.
+    // Only one diagnostic (AT1301) must survive for the malformed @say.
+    const result = compile("@scene s\n@say speaker=Alice\nHello.\n- item\n");
+    expect(result.diagnostics).toHaveLength(1);
+    expect(result.diagnostics[0]!.code).toBe("AT1301");
+  });
+
+  it("keeps a genuine parseProseChunk warning when the body IS a valid single Paragraph", () => {
+    const result = compile("@scene s\n@say speaker=Alice\n> blockquote line\n");
+    expect(codesOf(result.diagnostics)).toContain("AT3001");
+    expect(result.document.scenes[0]!.blocks.some((b) => b.type === "Dialogue")).toBe(true);
+  });
+
   it("rejects a Heading body", () => {
     const result = compile("@scene s\n@say speaker=Alice\n\n# Hello\n");
     expect(codesOf(result.diagnostics)).toContain("AT1301");

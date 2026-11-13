@@ -851,7 +851,16 @@ function parseDialogue(
   const bodyLines = lines.slice(bodyStart, bodyEnd);
   const first = bodyLines[0] as SourceLine;
   const text = joinLineText(bodyLines);
-  const blocks = parseProseChunk(text, { startLine: first.number, startOffset: first.startOffset }, diagnostics);
+  // Buffered, not pushed to `diagnostics` directly: `parseProseChunk` can
+  // emit its own warnings (e.g. AT3001 for an unsupported construct falling
+  // back to plain text) as a side effect of parsing, independently of
+  // whether the resulting blocks even satisfy Dialogue's cardinality rule.
+  // Section 32.11 locks exactly one diagnostic per malformed `@say` — so
+  // these are discarded on every malformed-body path below and merged into
+  // `diagnostics` only once the body is confirmed to be a valid single
+  // Paragraph.
+  const bodyDiagnostics: Diagnostic[] = [];
+  const blocks = parseProseChunk(text, { startLine: first.number, startOffset: first.startOffset }, bodyDiagnostics);
 
   if (blocks.length === 0) {
     const headerEnd = lineEnd(headerLine);
@@ -874,6 +883,8 @@ function parseDialogue(
     diagnostics.push(Diagnostics.malformedDialogue("dialogue content must be a paragraph, not a heading", only.span));
     return { block: undefined, nextIndex: bodyEnd };
   }
+
+  for (const diagnostic of bodyDiagnostics) diagnostics.push(diagnostic);
 
   return {
     block: {
