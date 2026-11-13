@@ -7,7 +7,7 @@ A web-native, prose-first engine and toolchain for interactive stories and visua
 [![License: MIT](https://img.shields.io/github/license/z0rimo/AfterText)](LICENSE)
 [![Node](https://img.shields.io/badge/node-%3E%3D22.12-339933)](CONTRIBUTING.md)
 
-> **v0.1.1 — foundation release.** The core pipeline works end to end, but the project is early: the language, APIs, and feature set are small and will change. It is not production-ready.
+> **v0.3.0 — Sprite Stage and Dialogue.** The core pipeline works end to end, but the project is early: the language, APIs, and feature set are small and will change. It is not production-ready.
 
 You write a story as ordinary prose and add a few declarative directives (`@scene`, `@choice`, `@set`, `@background`, ...). The story is meant to stay readable as prose even without the presentation directives. AfterText compiles it into a validated, typed story document, runs it with a pure headless runtime, and can play it in the browser with a React component. Story logic is declarative: `.at` files cannot execute arbitrary JavaScript.
 

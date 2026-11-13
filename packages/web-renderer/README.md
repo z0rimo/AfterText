@@ -3,7 +3,7 @@
 A React renderer for playing a compiled AfterText `StoryDocument` in the
 browser.
 
-> v0.1 foundation: the public API and presentation feature set are early and
+> v0.3.0: the public API and presentation feature set are early and
 > may change.
 
 ## Install

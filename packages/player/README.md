@@ -3,7 +3,7 @@
 A small headless player layer that threads an active AfterText runtime session
 one observable step at a time.
 
-> v0.1 foundation: the public API is early and may change.
+> v0.3.0: the public API is early and may change.
 
 ## Install
 

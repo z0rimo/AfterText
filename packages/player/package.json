@@ -1,6 +1,6 @@
 {
   "name": "@aftertext/player",
-  "version": "0.1.1",
+  "version": "0.3.0",
   "description": "AfterText headless Player Core: a thin, pure application layer over @aftertext/runtime for threading an active play session.",
   "license": "MIT",
   "repository": {
@@ -30,8 +30,8 @@
     "test": "vitest run"
   },
   "dependencies": {
-    "@aftertext/compiler": "^0.1.1",
-    "@aftertext/runtime": "^0.1.1"
+    "@aftertext/compiler": "^0.3.0",
+    "@aftertext/runtime": "^0.3.0"
   },
   "devDependencies": {
     "@types/node": "^22.7.5",
