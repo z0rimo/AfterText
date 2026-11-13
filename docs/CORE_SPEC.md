@@ -1210,6 +1210,7 @@ Executing a scene means walking its blocks in source order. Some constructs run 
 | `ParagraphNode` | no | `content` | no | indirectly¹ | no |
 | `HeadingNode` | no | `content` | no | indirectly¹ | no |
 | `PresentationNode` | no | `presentation` | no | indirectly¹ | no |
+| `DialogueNode` (Section 32) | no | `dialogue` | no | indirectly¹ | no |
 | `SetNode` | yes | no | yes | no | no |
 | `ConditionalNode` | yes (branch *selection* only) | no, by itself | no, by itself | no | no |
 | `VariantNode` | yes (branch *resolution* only) | no, by itself | no | no — resolution alone never touches `ReaderState` (17.9) | no |
@@ -1434,7 +1435,7 @@ Status: LOCKED
 Two independent layers, not one:
 
 1. **Structural: `GotoNode` always suspends** (17.7). Because a scene's block tree is finite and the language has no looping construct of its own, walking *within* one scene between suspensions is inherently bounded by that scene's (finite) AST. The only way execution could otherwise cross scene boundaries without limit — e.g. `scene A -> scene B -> scene A -> ...` — is if `@goto` continued automatically into the next scene's blocks without returning control first. Making `@goto` a suspension point removes that possibility by construction: a single call to `advance` can never itself traverse more than one scene.
-2. **A hard step-count backstop.** The budget applies to *automatic internal work performed during a single `advance` call, before it reaches a suspension point* — e.g. a `@set` evaluation, a conditional branch selection, a Variant branch resolution, or descending into a selected branch's blocks ("nested inline execution"). Reaching any suspension point (`content`, `presentation`, `choice`, `navigation`, `completed`) ends that `advance` call and, with it, resets the budget — the count is per-call, not cumulative across a whole reading session. If the count of automatic steps exceeds a fixed limit before any suspension point is reached, the interpreter raises an "execution-step limit exceeded" runtime error rather than hanging. This exists for defense in depth — a pathologically large or degenerate scene (not an infinite loop, just a very large finite one) — and as a backstop against the structural argument in (1) turning out to have a gap. No timers, no concurrency: a plain counter compared against a constant, fully deterministic and trivially testable. The architectural requirement is that this deterministic finite guard exists; the specific numeric limit is an implementation detail to be chosen later, not a value this document commits to. Exhaustion follows the same progressive rule as any other runtime error (17.11): all automatic work already completed earlier in that `advance` call remains reflected in the returned state; only the operation that could not begin because the budget ran out is not executed.
+2. **A hard step-count backstop.** The budget applies to *automatic internal work performed during a single `advance` call, before it reaches a suspension point* — e.g. a `@set` evaluation, a conditional branch selection, a Variant branch resolution, or descending into a selected branch's blocks ("nested inline execution"). Reaching any suspension point (`content`, `presentation`, `choice`, `dialogue` (Section 32), `navigation`, `completed`) ends that `advance` call and, with it, resets the budget — the count is per-call, not cumulative across a whole reading session. If the count of automatic steps exceeds a fixed limit before any suspension point is reached, the interpreter raises an "execution-step limit exceeded" runtime error rather than hanging. This exists for defense in depth — a pathologically large or degenerate scene (not an infinite loop, just a very large finite one) — and as a backstop against the structural argument in (1) turning out to have a gap. No timers, no concurrency: a plain counter compared against a constant, fully deterministic and trivially testable. The architectural requirement is that this deterministic finite guard exists; the specific numeric limit is an implementation detail to be chosen later, not a value this document commits to. Exhaustion follows the same progressive rule as any other runtime error (17.11): all automatic work already completed earlier in that `advance` call remains reflected in the returned state; only the operation that could not begin because the budget ran out is not executed.
 
 A caller that mechanically calls `advance`/`next()` in an unattended loop across *many* suspensions (e.g. an "auto-skip" feature looping through repeated `navigation` results) can still loop indefinitely across many calls — that is the caller's own control flow, not a runtime hang, and is out of scope for the runtime to prevent.
 
@@ -1460,7 +1461,7 @@ function selectChoice(
 interface ExecutionStep {
   runtimeState: RuntimeState;
   cursor: ExecutionCursor;
-  result: ExecutionResult; // content | presentation | choice | navigation | completed
+  result: ExecutionResult; // content | presentation | choice | dialogue (Section 32) | navigation | completed
 }
 ```
 
@@ -1718,7 +1719,7 @@ interface PlayerState {
 
 ## 18.3 No Separate PlayerView Model
 
-This slice does not introduce a PlayerView/PlayerEvent hierarchy. The runtime's existing `ExecutionResult` variants — `content`, `presentation`, `choice`, `navigation`, `completed`, `error` — already carry the information a future renderer needs: a renderer-ready inline AST for content (`ParagraphNode`/`HeadingNode`/`InlineNode`) and already-typed, unit-normalized `PresentationCommand`s. Player surfaces these results unchanged; a future renderer adapts them to UI. Player does not create a second narrative-result AST.
+This slice does not introduce a PlayerView/PlayerEvent hierarchy. The runtime's existing `ExecutionResult` variants — `content`, `presentation`, `choice`, `dialogue` (Section 32, additive as of v0.3.0), `navigation`, `completed`, `error` — already carry the information a future renderer needs: a renderer-ready inline AST for content (`ParagraphNode`/`HeadingNode`/`InlineNode`) and already-typed, unit-normalized `PresentationCommand`s. Player surfaces these results unchanged; a future renderer adapts them to UI. Player does not create a second narrative-result AST.
 
 ## 18.4 `createPlayer`
 
