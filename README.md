@@ -7,7 +7,7 @@ A web-native, prose-first engine and toolchain for interactive stories and visua
 [![License: MIT](https://img.shields.io/github/license/z0rimo/AfterText)](LICENSE)
 [![Node](https://img.shields.io/badge/node-%3E%3D22.12-339933)](CONTRIBUTING.md)
 
-> **v0.1.1 — foundation release.** The core pipeline works end to end, but the project is early: the language, APIs, and feature set are small and will change. It is not production-ready.
+> **v0.3.0 — Sprite Stage and Dialogue.** The core pipeline works end to end, but the project is early: the language, APIs, and feature set are small and will change. It is not production-ready.
 
 You write a story as ordinary prose and add a few declarative directives (`@scene`, `@choice`, `@set`, `@background`, ...). The story is meant to stay readable as prose even without the presentation directives. AfterText compiles it into a validated, typed story document, runs it with a pure headless runtime, and can play it in the browser with a React component. Story logic is declarative: `.at` files cannot execute arbitrary JavaScript.
 
@@ -118,13 +118,15 @@ export function App() {
 - Story state with `@set`, plus conditionals (`@if` / `@elseif` / `@else`) and variants
 - Scenes, `@goto`, and `@choice` (with conditional choice items)
 - Presentation: `@background`, `@layer`, `@camera zoom`, `@music`, `@sfx`, `@pause`
+- Sprite Stage: multiple simultaneously visible sprites with `@sprite show` / `@sprite hide` and `left` / `center` / `right` positioning
+- Dialogue: `@say` character speech, rendered with a visible speaker label
 - Headless runtime and player (pure, step-by-step)
 - React web renderer
 - Exact source locations (spans) in the AST, for tools that edit `.at` source
 
 ## Not yet
 
-Not implemented, planned for later releases: dialogue / character model, multiple sprites with show/hide and positioning, visual transitions, save/load, history/backlog, auto and skip, voice, multi-file projects, and editor/tooling integrations.
+Not implemented, planned for later releases: visual transitions, free x/y sprite positioning, scale/rotation, sprite animation, save/load, history/backlog, auto and skip, voice, multi-file projects, and editor/tooling integrations.
 
 ## Packages
 

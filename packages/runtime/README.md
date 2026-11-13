@@ -3,7 +3,7 @@
 Pure narrative execution for compiled AfterText `StoryDocument` values,
 including story state, reader memory, choices, variants, and navigation.
 
-> v0.1 foundation: the public API is early and may change.
+> v0.3.0: the public API is early and may change.
 
 ## Install
 
