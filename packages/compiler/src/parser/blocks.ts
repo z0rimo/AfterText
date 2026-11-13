@@ -768,11 +768,11 @@ function parseDialogueHeader(
       speakerValue = match[1] as string;
       speakerValueStart = tokenStart + SAY_SPEAKER_PREFIX_LENGTH;
       speakerValueEnd = tokenEnd;
-    } else if (unsupportedToken === undefined) {
+    } else {
       // First unsupported token only — Section 32.11's diagnostic precedence
       // reports at most one AT1301 per malformed `@say`, so later unsupported
       // tokens (if any) are never separately diagnosed.
-      unsupportedToken = { start: tokenStart, end: tokenEnd };
+      unsupportedToken ??= { start: tokenStart, end: tokenEnd };
     }
   }
 
