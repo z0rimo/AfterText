@@ -118,13 +118,15 @@ export function App() {
 - Story state with `@set`, plus conditionals (`@if` / `@elseif` / `@else`) and variants
 - Scenes, `@goto`, and `@choice` (with conditional choice items)
 - Presentation: `@background`, `@layer`, `@camera zoom`, `@music`, `@sfx`, `@pause`
+- Sprite Stage: multiple simultaneously visible sprites with `@sprite show` / `@sprite hide` and `left` / `center` / `right` positioning
+- Dialogue: `@say` character speech, rendered with a visible speaker label
 - Headless runtime and player (pure, step-by-step)
 - React web renderer
 - Exact source locations (spans) in the AST, for tools that edit `.at` source
 
 ## Not yet
 
-Not implemented, planned for later releases: dialogue / character model, multiple sprites with show/hide and positioning, visual transitions, save/load, history/backlog, auto and skip, voice, multi-file projects, and editor/tooling integrations.
+Not implemented, planned for later releases: visual transitions, free x/y sprite positioning, scale/rotation, sprite animation, save/load, history/backlog, auto and skip, voice, multi-file projects, and editor/tooling integrations.
 
 ## Packages
 
