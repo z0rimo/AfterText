@@ -1,6 +1,6 @@
 {
   "name": "@aftertext/compiler",
-  "version": "0.1.1",
+  "version": "0.3.0",
   "description": "AfterText compiler: parses AfterText source into a validated Story AST.",
   "license": "MIT",
   "repository": {

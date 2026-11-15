@@ -2,11 +2,11 @@
 
 ## Supported versions
 
-AfterText is an early (v0.1.x) foundation. Security fixes are made for the **latest published release** of the four packages (`@aftertext/compiler`, `@aftertext/runtime`, `@aftertext/player`, `@aftertext/web-renderer`). Older versions are not patched; please upgrade to the latest release. This policy will be revisited when the project reaches 1.0.
+AfterText is an early (v0.3.x) foundation. Security fixes are made for the **latest published release** of the four packages (`@aftertext/compiler`, `@aftertext/runtime`, `@aftertext/player`, `@aftertext/web-renderer`). Older versions are not patched; please upgrade to the latest release. This policy will be revisited when the project reaches 1.0.
 
 | Version | Supported |
 | --- | --- |
-| latest `0.1.x` | yes |
+| latest `0.3.x` | yes |
 | anything older | no |
 
 ## Reporting a vulnerability

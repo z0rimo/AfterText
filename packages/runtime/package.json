@@ -1,6 +1,6 @@
 {
   "name": "@aftertext/runtime",
-  "version": "0.1.1",
+  "version": "0.3.0",
   "description": "AfterText runtime domain foundation: StoryState, ReaderState, and NavigationState derived from a compiled StoryDocument.",
   "license": "MIT",
   "repository": {
@@ -30,7 +30,7 @@
     "test": "vitest run"
   },
   "dependencies": {
-    "@aftertext/compiler": "^0.1.1"
+    "@aftertext/compiler": "^0.3.0"
   },
   "devDependencies": {
     "@types/node": "^22.7.5",

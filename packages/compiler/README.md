@@ -2,7 +2,7 @@
 
 Compiles prose-first AfterText source into a validated `StoryDocument`.
 
-> v0.1 foundation: the language and public API are early and may change.
+> v0.3.0: the language and public API are early and may change.
 
 ## Install
 

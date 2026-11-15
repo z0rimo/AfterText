@@ -1,6 +1,6 @@
 # AfterText — Core Specification
 
-> Status: v0.1.x foundation (early development)
+> Status: v0.3.x foundation (early development)
 > Role: Canonical specification of the AfterText language and of the compiler, runtime, player, and web-renderer contracts
 > Scope: Product intent, architectural boundaries, language principles, public AST and diagnostic contracts, and stable design decisions
 

@@ -1,6 +1,6 @@
 # Contributing to AfterText
 
-Thanks for your interest. AfterText is an early (v0.1.x) foundation, and the language, APIs, and feature set will change. Contributions are welcome. This page explains how to get set up and how changes get in.
+Thanks for your interest. AfterText is an early (v0.3.x) foundation, and the language, APIs, and feature set will change. Contributions are welcome. This page explains how to get set up and how changes get in.
 
 ## Quick map
 
