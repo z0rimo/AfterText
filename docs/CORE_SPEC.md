@@ -1383,13 +1383,17 @@ The call that pushes Scene B's frame fails on the `@set` before any observable r
 
 If resolution enters `happy` and then errors before `Paragraph`, a later `advance()` resuming from the returned cursor must still know that `Paragraph` belongs to that same, still-unrecorded `mood`/`happy` occurrence.
 
-Because of this, whether an episode or occurrence has already been recorded cannot be determined by a computation confined to a single `advance()` call, and specifically cannot be reduced to checking `cursor.length === 0` at call start. The ephemeral `ExecutionCursor` may therefore carry the minimum internal metadata necessary to answer, across calls: has the current scene-entry episode already recorded its visit, and — per active Variant-branch frame — which `variantId`/`branchId` it corresponds to, and whether that occurrence has already been recorded. This metadata is runtime-only, ephemeral, never written into `ReaderState`, never persisted, and remains opaque to consumers exactly as the rest of `ExecutionCursor` already is (17.10). This is not a reintroduction of speculative plumbing rejected in an earlier pass — Reader Memory integration is what now makes it a concrete, required need rather than a hypothetical one. Its exact representation (e.g. a per-frame `seenRecorded` flag alongside a resolved branch's `variantId`/`branchId`) is an implementation-level decision, not fixed here.
+Because of this, whether an episode or occurrence has already been recorded cannot be determined by a computation confined to a single `advance()` call, and specifically cannot be reduced to checking `cursor.length === 0` at call start. The ephemeral `ExecutionCursor` may therefore carry the minimum internal metadata necessary to answer, across calls: has the current scene-entry episode already recorded its visit, and — per active Variant-branch frame — which `variantId`/`branchId` it corresponds to, and whether that occurrence has already been recorded. This metadata is runtime-only, ephemeral, never written into `ReaderState`, and remains opaque to consumers exactly as the rest of `ExecutionCursor` already is (17.10). **As of v0.0–v0.3, it was additionally never persisted in any form; as of v0.4, Section 33.4 supersedes only that last part** — `toCursorPosition(runtimeState, cursor)` now always captures each currently-open frame's real status into the opaque snapshot position, uniformly across every suspension kind (Section 33.4, 33.9: not kind-dependent, since the encoder takes no kind parameter and must behave identically given identical inputs — a real, confirmed requirement, not merely a convenience, since `selectPlayerChoice`'s own error path can echo the exact same `runtimeState`/`cursor` a different suspension kind would have snapshotted). For the four suspension kinds already fully resolved by suspension time, the captured value is simply always `true`, so restoring it reproduces exactly the "already recorded" behavior this design always intended; only for a progressive `error` can the captured value genuinely be `false`, and restore must reconstruct it exactly as captured so a retried `advance()` after restore still records a pending visit/occurrence correctly. Everything else in this paragraph remains exactly as locked: the metadata still never becomes `ReaderState`, and still stays opaque. This is not a reintroduction of speculative plumbing rejected in an earlier pass — Reader Memory integration is what now makes it a concrete, required need rather than a hypothetical one. Its exact representation (e.g. a per-frame `seenRecorded` flag alongside a resolved branch's `variantId`/`branchId`) is an implementation-level decision, not fixed here.
 
 ## 17.10 Execution Cursor and Persistence
 
-Status: LOCKED for v0 scope / explicitly UNRESOLVED for cross-session mid-scene resume
+Status: LOCKED for v0–v0.3 scope / resolved for v0.4 by Section 33
 
-Walking a scene's nested blocks (inside `@if`/`@variant` branches) requires tracking a position deeper than `NavigationState.sceneId` alone. This position — the **execution cursor** — exists separately from `RuntimeState` and is **ephemeral interpreter state for v0, not persisted.**
+**v0.0–v0.3:** the execution cursor was ephemeral interpreter state, never persisted, and cross-session mid-scene resume was explicitly unresolved (see the open question below, preserved as accurate history of that period).
+
+**v0.4:** the persistence question below is resolved by the Save/Restore contract in Section 33. Section 33 does not change the cursor's status as *ephemeral, in-memory interpreter state* — `ExecutionCursor` itself is still never written into `RuntimeState`/`ReaderState` and is still not the thing a snapshot stores verbatim. What changes is that `@aftertext/player` can now, at any valid suspension point, derive from the live cursor a separate, opaque, JSON-compatible structural position (Section 33.4) sufficient to reconstruct an equivalent cursor later against a freshly compiled, semantically-matching `StoryDocument` (Section 33.5) — without replaying any already-executed automatic operation (Section 33.9). The naive-replay double-application risk described below is exactly what this reconstruction-rather-than-replay design avoids; it is not solved by relaxing Decision E, inventing stable authored ids for structural positions, or persisting `ExecutionCursor` itself.
+
+Walking a scene's nested blocks (inside `@if`/`@variant` branches) requires tracking a position deeper than `NavigationState.sceneId` alone. This position — the **execution cursor** — exists separately from `RuntimeState` and is **ephemeral interpreter state, not itself persisted** (its derived structural position is persisted instead, per Section 33.4).
 
 **Execution structural position is not the same kind of thing as reader-memory identity, and the two must not be conflated:**
 
@@ -1397,9 +1401,9 @@ Walking a scene's nested blocks (inside `@if`/`@variant` branches) requires trac
 * `ReaderState` identity (scene ids, Variant branch ids) answers "what should a save file remember about the reader, potentially for a very long time, potentially across the author editing the story." Decision E forbids unstable, source-derived identifiers (block indexes, offsets) here specifically because saved data must outlive incidental changes to the document's structure.
 * Because the cursor is ephemeral and never written to persisted state, **block indexes or a structural path (e.g. "block 2, inside its selected branch, block 0") are an acceptable internal representation for it** — the instability that makes such a scheme unacceptable for `ReaderState` (Decision E) simply does not apply to something that is never saved. Nothing about this section relaxes Decision E for `ReaderState`/`seenBlocks`; it only clarifies that the constraint was never about the cursor in the first place.
 * `NavigationState.sceneId` is not being changed by this design task (explicitly out of scope) and remains the only *persisted* position.
-* Reader Memory integration (17.9) is a second, concrete case of the same allowance: the cursor may additionally carry ephemeral scene-entry/Variant-occurrence bookkeeping (whether the current episode's visit, or a given active branch frame's seen-status, has already been recorded) needed only to make `recordSceneVisit`/`recordVariantSeen` correct across multiple `advance()` calls — e.g. after a progressive error or step-budget exhaustion. The same constraint applies: acceptable specifically because it is never persisted and never written into `ReaderState`.
+* Reader Memory integration (17.9) is a second, concrete case of the same allowance: the cursor may additionally carry ephemeral scene-entry/Variant-occurrence bookkeeping (whether the current episode's visit, or a given active branch frame's seen-status, has already been recorded) needed only to make `recordSceneVisit`/`recordVariantSeen` correct across multiple `advance()` calls — e.g. after a progressive error or step-budget exhaustion. The same constraint applies: acceptable specifically because it is never written into `ReaderState` — and, as of v0.0–v0.3, because it was never persisted in any form either; as of v0.4, Section 33.4 supersedes only that second part, uniformly across suspension kinds, not specifically for `error` (Section 17.9's own bullet above states the full, current scope of this supersession).
 
-**Open question, deliberately left unresolved:** if a session is saved while suspended *mid-scene* (after some but not all of a scene's automatic blocks have run) and later resumed, the only safe replay starting point without a cursor is the top of the current scene — but naively replaying already-executed `@set` statements would double-apply their effects (e.g. `@set counter = counter + 1` would increment twice). This is a genuine, unresolved correctness gap, not a decision made and hidden. It does not need to be solved before implementing the execution core, but must not be silently papered over by claiming full mid-scene resume works when it does not. Solving it (a real checkpoint/cursor persistence design, or an authoring convention around scene granularity) is FUTURE work, out of scope for this design pass.
+**Open question as of v0.0–v0.3, now resolved by Section 33:** if a session is saved while suspended *mid-scene* (after some but not all of a scene's automatic blocks have run) and later resumed, the only safe replay starting point without a cursor is the top of the current scene — but naively replaying already-executed `@set` statements would double-apply their effects (e.g. `@set counter = counter + 1` would increment twice). This was, at the time, a genuine, unresolved correctness gap, not a decision made and hidden; it was not solved before implementing the execution core, and was not papered over by any claim that mid-scene resume already worked. **As of v0.4, Section 33 solves it** — not by naive replay, but by persisting a reconstructable structural position (Section 33.4) and re-deriving, rather than re-executing, the suspended result at restore time (Section 33.7, 33.9); already-completed automatic operations are never run again.
 
 ## 17.11 Runtime Errors
 
@@ -1781,6 +1785,8 @@ player = advancePlayer(document, player);
 An older `PlayerState` value remains a valid, immutable snapshot and may be retained for replay/fork, exactly like a runtime `ExecutionStep`.
 
 No generic `RuntimeSession` wrapper is introduced in this slice. The current concrete need is a single headless Player consumer; a generic session abstraction may be extracted later only if multiple distinct consumers demonstrate genuinely duplicated orchestration needs — not designed speculatively now.
+
+**Reaffirmed by Section 33 (v0.4 Save/Restore):** `snapshotPlayer`/`restorePlayer` (Section 33.6, 33.8) are themselves plain functions over `PlayerState`, not methods of a new stateful abstraction. They introduce no `Player` instance, no `RuntimeSession`, no `StoryEngine`, and no manager/service singleton. `PlayerState` remains exactly as immutable as this section already locks it — restoring a snapshot produces a new `PlayerState` value by the same pure-construction discipline `createPlayer`/`advancePlayer` already use; it never mutates a retained `PlayerState`, and nothing about Save/Restore requires or introduces a mutable session object to hold the "current" one.
 
 ## 18.10 Content, Completed, and Error Handling
 
@@ -2224,7 +2230,9 @@ Completed and error screens may render over the last active Background/Layer —
 
 ## 20.26 Replay/History Scope
 
-The renderer continues to own exactly one active path. No visual-state reconstruction or history is added: no rollback, presentation history, save/load restoration, replay timeline, or reverse command application. Player's own lower-level immutable replay/fork ability is unchanged but is not exposed as renderer UI in this slice.
+The renderer continues to own exactly one active path. No visual-state reconstruction or history is added by this slice: no rollback, presentation history, replay timeline, or reverse command application. Player's own lower-level immutable replay/fork ability is unchanged but is not exposed as renderer UI in this slice.
+
+**Superseded in part by Section 33 (v0.4):** engine-snapshot save/restore — suspending a session and later resuming it at the same structural position, via `PlayerSnapshot`/`PresentationSnapshot`/`AfterTextPlayerSnapshot` — becomes additive public capability as of Section 33. This is narrower than, and must not be confused with, the history/replay/rollback concepts this section excludes: Save/Restore persists and restores exactly one suspended position, not a timeline of prior positions, and implies no backlog, no undo, no reverse execution, and no multi-point history of any kind. Those remain out of scope, unchanged by Section 33.
 
 ## 20.27 Demo Requirements
 
@@ -4020,3 +4028,819 @@ Not part of v0.3.0 Dialogue: Character registry, colon syntax (Section 32.4), si
 ## 32.35 Future Compatibility
 
 The locked v0.3.0 Dialogue model (Section 32.6–32.21) does not preclude future additive features such as a Character registry resolving the opaque `speaker` string (Section 32.23), generic named-parameter quoting lifting Section 32.7's current limitation, or Sprite-to-speaker binding. Their syntax and semantics are not designed here.
+
+# 33. Save/Restore
+
+## 33.1 Scope and Non-Goals
+
+This section locks the v0.4 **Save/Restore (Engine Snapshot)** design — the first v0.4 Core feature, following v0.3.0 Dialogue (Section 32). It extends, and does not replace, the already-locked boundaries reaffirmed throughout this section: Compiler owns syntax/AST; Runtime owns progression/state; Player remains a pure-functional application layer with no mutable class, no `StoryEngine`/session object, and no hidden module state (Section 18.9); the Renderer owns `PresentationState` (Section 20.5); Runtime/Player never depend on the Web Renderer (Section 19.19); asset URL resolution remains renderer/host-owned (Section 20.11).
+
+v0.4 exposes a **persistence capability**, not a storage policy or a built-in UI. AfterText Core produces and consumes plain JSON-compatible snapshot values; what a host does with those values — where they are written, when, and under what user action — is entirely the host's decision and is out of scope here (Section 33.16).
+
+In scope:
+
+```text
+structural execution position (replacing the internal AST-referencing cursor representation)
+PlayerSnapshot / snapshotPlayer
+PlayerRestoreError / restorePlayer
+PresentationSnapshot for the Web Renderer
+AfterTextPlayerSnapshot and a ref-based React snapshot/restore handle
+deterministic resume at the exact suspended structural position
+runtime validation of externally-supplied (untrusted) snapshot data
+```
+
+Out of scope:
+
+```text
+save slots
+built-in Save/Load UI
+localStorage / IndexedDB / filesystem / database / cloud storage
+autosave
+cross-version snapshot migration
+migration across a semantically edited document
+exact timer elapsed-time restoration
+audio playback position restoration
+Character registry (Section 32.23)
+Sprite transitions/animation
+Reader Memory asymptotic optimization (Section 33.19)
+history/backlog, undo, reverse execution, or timeline replay (Section 20.26)
+```
+
+## 33.2 Snapshot Terminology and Ownership
+
+Status: LOCKED
+
+This section uses **Snapshot**, not `SaveState`, `SessionState`, `Checkpoint`, or `SerializedState`. A snapshot represents engine state at one suspension point; the word deliberately does not imply storage, durability, or a storage format — those are host concerns (Section 33.16).
+
+Ownership follows existing package boundaries exactly (Section 6, 18.1, 19.1):
+
+```text
+@aftertext/compiler       — no new Save/Restore API; unaffected (Section 33.18)
+@aftertext/runtime        — owns the minimal cursor position encode/decode boundary
+                             (toCursorPosition/fromCursorPosition or equivalent naming);
+                             internal structural-cursor change otherwise (Section 33.4, 33.18)
+@aftertext/player         — owns PlayerSnapshot, JsonValue, PlayerRestoreError,
+                             snapshotPlayer, restorePlayer — calling into Runtime's
+                             position encode/decode boundary, never constructing or
+                             inspecting a cursor itself (Section 33.6, 33.8)
+@aftertext/web-renderer   — owns PresentationSnapshot, PresentationRestoreError,
+                             and composes AfterTextPlayerSnapshot /
+                             AfterTextPlayerHandle for React (Section 33.10–33.11)
+```
+
+**Runtime's package boundary forces this one narrow exception to "no new Runtime public API."** `packages/runtime/package.json` declares an `exports` field restricted to its package root (`"."`, serving only `dist/index.js`) — Node's module resolution refuses any other import path once `exports` is present, so there is no such thing as an "internal, unexported" Runtime function that `@aftertext/player` (a separate published package) can still call; a function Player needs to invoke must be part of Runtime's public barrel, full stop. `ExecutionCursor`'s element type, `CursorFrame`/`CursorFrameOrigin`, is not exported either (Section 33.4), so Player cannot even construct or destructure a cursor value through undocumented structural knowledge — only Runtime can validly produce one. Runtime must therefore expose two small, new public functions that convert between a live `ExecutionCursor` and the opaque structural position `PlayerSnapshot.position` stores; Player calls them but never reaches into Runtime's cursor internals directly. This is the sole exception to "Runtime gains no new public API" stated elsewhere in this section — scoped to exactly these two functions (Section 33.4, 33.8, 33.18).
+
+`PlayerSnapshot` and `PresentationSnapshot` are **independently owned** (Model B): Player can snapshot/restore its own state with no dependency on the Web Renderer, and the Web Renderer composes both for React convenience without Player ever depending on, or knowing about, the Web Renderer (Section 19.19 is not violated).
+
+## 33.3 Suspension-Point Model
+
+Status: LOCKED
+
+A snapshot represents an AfterText session suspended immediately after an observable result has been produced and all synchronous state effects for that step have committed:
+
+> A snapshot represents an AfterText session suspended immediately after an observable result has been produced and all synchronous state effects for that step have committed.
+
+Concretely: by the time any suspension point (`content`, `dialogue`, `presentation`, `choice`, `navigation`, `completed`, `error` — Section 17.6, 32) is reached and returned, every automatic operation that `advance()` performs on the way there — `@set` evaluation, Conditional branch selection, Variant branch resolution, Reader Memory exposure recording (`recordSceneVisit`/`recordVariantSeen`, Section 17.9) — has already run to completion and is already folded into the returned `RuntimeState`/cursor (Section 17.11's progressive-execution model). There is no partially-applied observable step: snapshotting at a suspension point never captures work "in progress."
+
+## 33.4 Structural Execution Position
+
+Status: LOCKED
+
+`@aftertext/runtime`'s existing `ExecutionCursor` (Section 17.10) is a stack of frames, each an AST-referencing `{ blocks: readonly StoryBlock[]; index: number; origin?: CursorFrameOrigin }`. The `blocks` field holds live `StoryDocument`-derived AST references, which cannot be serialized to JSON and must not be — doing so would defeat the opacity and document-independence this design requires (Section 33.5). A snapshot therefore never stores `ExecutionCursor` or any `CursorFrame` verbatim.
+
+Instead, `@aftertext/runtime` exposes a new, narrow public function — `toCursorPosition(runtimeState: RuntimeState, cursor: ExecutionCursor): JsonValue` (naming per Section 33.2) — that derives, from a live cursor, a separate **structural position**: for each frame, which construct created it plus enough identity to re-descend into the exact same branch on restore, plus the frame's block index. **The function must take `runtimeState`, not just `cursor`, because the scene frame's own stable identity is not recoverable from the cursor alone:** frame 0's `CursorFrameOrigin` for a scene carries only `{ kind: "scene", visitRecorded }` (`packages/runtime/src/execution/cursor.ts`) — no `sceneId` field exists on any cursor frame anywhere. The current scene id lives only in `runtimeState.navigation.sceneId` (Section 17.3), so `toCursorPosition` reads it from there and embeds it directly into the opaque position payload it returns; this is also why `fromCursorPosition` (below) needs no separate scene-id parameter of its own — by the time it runs, the scene id is already inside the opaque `position` value it receives. `@aftertext/player` calls `toCursorPosition` at snapshot time; it never inspects `CursorFrame`/`CursorFrameOrigin` itself, which stay unexported (Section 33.2). Exactly three constructs create a cursor frame in the current execution model (confirmed directly against `packages/runtime/src/execution/advance.ts`):
+
+```text
+scene entry             — the outermost frame of a scene-entry episode
+conditional branch descent  — pushed when a Conditional (`@if`/`@elseif`/`@else`) branch is selected
+variant branch descent      — pushed when a Variant resolves to a branch
+```
+
+`ChoiceNode` never pushes a frame — after a Choice suspension, the cursor still points at the `ChoiceNode` itself, unchanged, and `selectChoice`/`selectPlayerChoice` resolve entirely from the suspension's own carried item set (Section 17.7, 18.7), never from the cursor. `Navigation` always fully resets the cursor to its initial (empty) value (Section 17.7). Neither case needs, or gets, a structural-position frame kind of its own.
+
+Stable identity per frame kind, matching existing stable identities rather than inventing new ones:
+
+```text
+scene            -> sceneId (the existing stable scene identity; recoverable as the
+                     frame-0 position's scene, i.e. RuntimeState.navigation.sceneId
+                     at snapshot time — no new per-frame scene field is required)
+variant branch    -> variantId + branchId (the existing stable identities already
+                     carried by CursorFrameOrigin for Reader-Memory purposes, Section 17.9)
+conditional branch -> a positional branchIndex (this branch's position within its
+                     ConditionalNode's branches list)
+```
+
+**The reverse direction, `fromCursorPosition`, must return the resolved AST node too, not only the reconstructed cursor.** `ExecutionCursor` has always been fully opaque to every consumer, including Player, since before v0.4 (Section 17.13: "treated as an opaque value the consumer stores and passes back... never constructed or inspected directly") — restoring a `content`/`dialogue`/`presentation`/`choice` suspension needs the actual `StoryBlock` at the resolved position to reconstruct that result's AST-bearing fields (Section 33.7), but Player can never read a `CursorFrame`'s `blocks`/`index` to get it, and calling `advance()` on the decoded cursor would consume the *next* operation rather than returning the one already produced. The signature is therefore:
+
+```text
+fromCursorPosition(
+  document: StoryDocument,
+  runtimeState: RuntimeState,
+  position: JsonValue,
+  resultKind: "content" | "dialogue" | "presentation" | "choice" | "error"
+): FromCursorPositionResult
+
+FromCursorPositionResult =
+  | { ok: true; cursor: ExecutionCursor; resolvedBlock?: StoryBlock }
+  | { ok: false; reason: string }
+```
+
+(exact naming per repository convention). `resultKind` is supplied by Player from its own already-decoded `current` payload (opacity is a promise to external consumers, not a restriction on Player's own internal implementation of the thing it itself produced) — Runtime needs it to know whether the resolved block sits at the active frame's `index - 1` (content/dialogue/presentation, which already advanced past it, Section 33.8 step 6) or at `index` itself (choice, which never does). `resolvedBlock` is an ordinary, already-public `@aftertext/compiler` `StoryBlock` (Section 6) — handing it back introduces no new Runtime-owned result-reconstruction logic; Player narrows its `type` itself to build `{type:"content", block: resolvedBlock}`, extract a Dialogue's `speaker`/`content`, extract a Presentation's `command`, or (for `choice`) read a `ChoiceNode`'s own `items` to validate the persisted items against (Section 33.8 step 7's subsequence check) — exactly the same public AST-field reads Player already performs whenever it narrows `PlayerState.current` today, not a new capability.
+
+**`fromCursorPosition` also takes `runtimeState`, so it can cross-check scene consistency internally.** `position`'s embedded scene id (Section 33.4's `toCursorPosition` paragraph) and the separately-persisted `runtimeState.navigation.sceneId` are two independent fields in an untrusted snapshot — both individually well-typed and each independently a real scene in the document does not mean they agree with each other. A live session always has them equal, since `toCursorPosition` reads both from the very same live state at snapshot time; a crafted snapshot embedding scene A in `position` while setting `runtimeState.navigation.sceneId` to a different, equally-real scene B would otherwise walk A's blocks while Reader-Memory recording and any later `navigateTo` call treat B as current — corrupting visit attribution and navigation provenance even though every individual field passed its own check. Only Runtime can catch this, because only Runtime ever decodes the embedded scene id out of the opaque `position`; `fromCursorPosition` therefore returns `{ ok: false, reason }` whenever the two disagree, exactly as it does for any other unresolvable position.
+
+**`"error"` is included in `resultKind` for cursor reconstruction only, never for a resolved block.** An `error` suspension still needs its cursor rebuilt — restoring it must leave the session resumable, so a retried `advance()` can continue (Section 33.4's exposure-flag persistence exists precisely for this retry case) — but it never needs a `StoryBlock`, since the error's own plain data is restored directly, with its span dropped (Section 33.7), not re-derived from any AST node. Calling `fromCursorPosition(document, runtimeState, position, "error")` therefore omits `resolvedBlock` from its success result entirely (not merely unused — there may be no single well-defined block to resolve: an error can originate from a malformed-block dispatch failure, Section 17.11, where no ordinary block lookup even applies). `navigation`/`completed`/"not started" are the only kinds where `fromCursorPosition` is not called at all — none of the three has a cursor to reconstruct in the first place (Section 33.7: cursor is already fully reset for navigation/completed, and there is no suspension yet for "not started").
+
+**Conditional branch identity is locked as positional (`branchIndex`), not a new stable authored id.** This is an intentional, accepted limitation, not an oversight: Decision E (Section 17.4) forbids unstable source-derived identifiers specifically for data that must outlive the author editing the document — that constraint governs `ReaderState`, never the execution cursor or its derived structural position (Section 17.10), and Save/Restore does not promise restoring across a semantically changed document in the first place (Section 33.5). A `branchIndex` is therefore an acceptable, sufficient identity for this purpose. Capturing it requires a small Runtime implementation change: `selectConditionalBranch`'s existing `node.branches` iteration already determines which branch was selected; the matching index must additionally be threaded into the frame so `toCursorPosition` can read it back out. This, together with `toCursorPosition`/`fromCursorPosition` themselves, is the only Runtime change v0.4 requires (Section 33.18).
+
+This is the required *semantic* information per frame — which of the three constructs produced it, enough identity to re-descend into the same branch, and a block index. The exact field names and internal representation (whether `CursorFrameOrigin` is extended, reused, or a separate locator type is introduced internally) are an implementation-level decision not frozen here, consistent with this document's existing convention of locking semantics rather than source layout (e.g. Section 17.10's own structural-path allowance) — what is frozen is only the public shape of `toCursorPosition`/`fromCursorPosition` themselves (opaque `JsonValue` position in and out; a reconstructed `ExecutionCursor` plus a resolved, already-public `StoryBlock` out of `fromCursorPosition`, Section 33.4), not whatever internal type they're implemented in terms of.
+
+**`toCursorPosition` always captures each currently-open frame's real `visitRecorded`/`seenRecorded` status — uniformly, regardless of suspension kind.** `CursorFrameOrigin`'s flags (Section 17.9) are encoded into the opaque position payload exactly as they stand on the live cursor at the moment `toCursorPosition(runtimeState, cursor)` is called. This is deliberately **not** kind-dependent: `toCursorPosition` takes only `runtimeState` and `cursor` (Section 33.4) — it has no `resultKind` parameter and cannot know, or behave differently based on, which suspension kind the caller is snapshotting. A kind-dependent encoding rule would in fact be impossible to implement correctly: `selectPlayerChoice`/`selectChoice`'s own `invalid-choice-selection` error path echoes the triggering suspension's `runtimeState`/`cursor` completely verbatim (`packages/runtime/src/execution/choice.ts`), so calling `selectPlayerChoice` on, say, a `content` suspension produces an `error` result carrying the *exact same* `runtimeState`/`cursor` the original `content` snapshot would have — `toCursorPosition` would receive identical arguments for both, and a deterministic two-argument function cannot return one encoding for one caller's conceptual "kind" and a different encoding for another caller's, when given the same inputs.
+
+Always capturing the real flags resolves this with no special-casing needed, because of what the real flag values actually are at each suspension kind: for `content`/`dialogue`/`presentation`/`choice`, `advance()` (`packages/runtime/src/execution/advance.ts`) calls `recordObservableExposure` immediately before committing each of them, so every currently-open frame's flag is **already, unconditionally `true`** by the time any of these four suspension points is reached — capturing the real value is equivalent to the simpler "always recorded" assumption this design originally stated for them, just arrived at by storing the true value rather than omitting it. For an `error` suspension specifically, the real flag may genuinely be `false`: `recordObservableExposure`'s own governing doc comment is explicit that it is called "only for a genuinely qualifying result (`content`/`presentation`/`choice`) — never for `navigation`/`completed`/an error," so a progressive error (Section 17.11) — e.g. step-budget exhaustion or an evaluation error inside a `@set`/Conditional/Variant block — can suspend with open frames whose flags are genuinely still `false`, exactly as they would be in the original in-memory session at that same point. Because the encoder always stores the real value either way, restore (`fromCursorPosition`) simply reconstructs each frame with its exact captured status — never overriding it to `true` — and this is correct for every kind uniformly: the four live kinds happen to always decode to `true` (matching the original in-memory session, since that's what the real value always is for them), and `error` decodes to whatever the real value actually was, closing the exact gap a kind-dependent encoding could not. Restoring the wrong value here would cause a later, successfully-retried `advance()` to skip a scene-visit/Variant-seen recording it would otherwise have performed — an under-count relative to the original session, not a double-count, but still a real divergence this uniform capture avoids. (`navigation` and `completed` need no such handling at all: both always return with the cursor fully reset to empty — Section 17.7, and `completed`'s one qualifying "empty scene" case already records its pending scene-visit inline, before returning — so neither ever suspends with an open frame in the first place, and `toCursorPosition` is not called for either, Section 33.7.)
+
+## 33.5 Document Compatibility and Fingerprint
+
+Status: LOCKED
+
+**Compatibility model: semantic-document identity.** Restoring a `PlayerSnapshot` is supported against a freshly compiled `StoryDocument` whose execution/rendering-relevant authored semantics match the document the snapshot originated from. This is deliberately neither of the two rejected alternatives:
+
+* **Not exact raw source text.** `StoryDocument`'s complete shape (`packages/compiler/src/ast/story.ts`) is exactly `{ type, metadata, initialState, entryScene, scenes }` — it contains no source-text field anywhere, and Player, which only ever receives a compiled `StoryDocument`, never has raw source text to compare in the first place. A "same source text" contract would describe a guarantee the code has no way to check.
+* **Not mere structural compatibility.** Two documents with the same block shapes but different authored content (e.g. Dialogue text changed from `Hello.` to `Goodbye.`) are not compatible — restoring across such a change would silently corrupt the restored session's displayed content. A structure-only check would accept this; semantic identity rejects it.
+
+Formatting-only or source-position-only changes that compile to the same semantic `StoryDocument` therefore remain compatible, intentionally. For example,
+
+```at
+@say speaker=Alice
+
+Hello.
+```
+
+and an equivalent adjacent-whitespace form that compiles identically (Section 32.2) produce the same fingerprint and remain restorable against each other.
+
+**Fingerprint.** `@aftertext/player` computes `documentFingerprint: string` from a given `StoryDocument` alone — no Compiler change is required (Section 33.18); fingerprinting happens entirely downstream of the existing compiled AST. Computing it is snapshot/restore-time work only — `snapshotPlayer` computes it once when producing a `PlayerSnapshot`, and `restorePlayer` computes it once more, against the given document, to compare (Section 33.8). Nothing in this contract requires or implies computing a fingerprint on every `advance()`/`selectPlayerChoice()` call; ordinary progression is entirely unaffected by this cost.
+
+Fingerprint input covers every execution/rendering-relevant compiled authored value, including at minimum:
+
+```text
+entryScene; initialState
+
+scene ids and scene order
+block types and order
+
+Paragraph / Heading / inline authored content: TextInline values,
+emphasis / strong / code content, link text/targets
+
+Dialogue speaker / content (Section 32)
+
+Presentation command types and all authored command values:
+background, layer, camera, music, sfx, pause, sprite (Section 14, 31)
+
+Choice item: text, target, condition expression
+Conditional: branch kind/order, condition expressions
+Variant: variant id, branch id, branch kind/order, condition expressions
+@set: name, expression
+Goto/navigation: target
+```
+
+This list is illustrative of the governing principle, not exhaustive by enumeration: any other compiled authored value that affects execution or renderer-visible output must be included even if not named above — a field is never excluded merely because it is absent from this list.
+
+Fingerprint input explicitly **excludes** values that do not affect execution/rendered authored semantics, because including them would reject documents that are semantically identical and should remain restorable:
+
+```text
+span / *SourceSpan fields anywhere in the AST (position metadata only)
+formatting trivia with no semantic representation
+metadata.title, metadata.entry
+```
+
+`metadata.title`/`metadata.entry` are excluded specifically because neither field is read anywhere in the compiled execution or rendering path — confirmed by inspection across `packages/runtime/src`, `packages/player/src`, and `packages/web-renderer/src` (zero references to either field in any of the three); entry resolution is already fully represented by the separate, included `entryScene` field. This exclusion is confirmed against every package that executes or renders a compiled document, not Runtime alone, and is a narrow, confirmed-by-code exclusion rather than a general license to exclude metadata.
+
+**Canonicalization.** `initialState` (`StoryStateDefinition = Readonly<Record<string, StateValue>>`, Section 12) is the one fingerprint-input field shaped as an unordered authored key/value map rather than an authored-order-significant list: two frontmatter declarations of the same variables with the same values in a different authored order are semantically identical `initialState` maps, and must produce the same fingerprint. A naive traversal that simply follows JavaScript's own object-key insertion order would not guarantee this — insertion order mirrors authoring order, which is not semantically meaningful here. The fingerprint computation must therefore traverse `initialState` (and any future fingerprint-input field with the same unordered-map shape) in a deterministic, sorted-key order, not raw property-enumeration order. This requirement does not extend to array-shaped fingerprint input — scene order, block order, Choice item order, Conditional/Variant branch order, and `CallExpression.args` order are all already authored-order-significant and must be traversed in their existing array order, preserved exactly as authored.
+
+Semantically meaningful changes — Dialogue text, a Choice target, a `@set` expression/value, a Presentation asset reference, a scene/block shape or ordering change, a Conditional/Variant branch's semantic content — must alter the fingerprint input and therefore the fingerprint, causing restore to be rejected as a document mismatch (`documentMismatch`, Section 33.8), subject to the collision caveat below.
+
+**Algorithm contract.** No specific hash algorithm is locked into this specification. The implementation must be deterministic, portable across supported JS environments (including browsers — no Node-only dependency such as the `crypto` module), and otherwise implementation-defined. No new cryptographic guarantee is introduced.
+
+**Collision semantics.** The fingerprint is **a defensive mismatch detector, not a cryptographic proof of document identity.** A non-cryptographic implementation may, in principle, collide. Accordingly: callers are responsible for restoring a snapshot only against its intended, compatible document; AfterText validates the fingerprint to catch ordinary mismatches early; and fingerprint equality alone is never described as a mathematical guarantee of semantic document equality.
+
+## 33.6 PlayerSnapshot
+
+Status: LOCKED
+
+`@aftertext/player` owns a new public JSON-compatible value type:
+
+```ts
+type JsonValue =
+  | string
+  | number
+  | boolean
+  | null
+  | readonly JsonValue[]
+  | { readonly [key: string]: JsonValue };
+```
+
+No `any`, `function`, `Date`, `Map`, `Set`, DOM object, or AST node reference may appear in a `JsonValue`. (Exact alias syntax follows repository style at implementation time; the type above is conceptual.)
+
+The public conceptual shape of a snapshot:
+
+```ts
+interface PlayerSnapshot {
+  readonly formatVersion: 1;
+  readonly documentFingerprint: string;
+  readonly runtimeState: RuntimeState;
+  readonly position: JsonValue;
+  readonly current: JsonValue;
+}
+```
+
+`runtimeState` is `RuntimeState` directly — already a public, locked type (Section 17.3) independent of this design; exposing it here freezes nothing new. For a `PlayerSnapshot` actually produced by `snapshotPlayer` from genuine live state, its numeric `StoryValue`/`StateValue` fields are already guaranteed JSON-safe: Section 17's existing, already-locked arithmetic-result invariant ("the result of any arithmetic operation must remain representable as a valid JSON number") means `NaN`/`Infinity`/`-Infinity` can never reach a live `RuntimeState` in the first place — and `initialState`'s own values are independently guaranteed finite at compile time (`AT1201`, `packages/compiler/src/diagnostics/codes.ts` — severity `"error"`, so a document with a non-finite `initialState` value is already `hasErrors === true` and unsupported for execution regardless of Save/Restore, exactly like the already-established `entryScene`/Music-volume/duplicate-Variant-id cases above). **This is a fact about live state, not a substitute for restore-time validation of untrusted input.** `restorePlayer` accepts `unknown` (Section 33.8) precisely because its argument need not have ever passed through real execution — `typeof x === "number"` is true for `NaN`/`Infinity`/`-Infinity` as well as for every genuinely finite number, so a shape-only check of `runtimeState` cannot tell them apart. Restore validation (Section 33.8, step 4) must therefore independently require every numeric `StoryValue` in a restored `runtimeState.story` to be finite, exactly re-imposing Section 17's invariant at the restore boundary rather than assuming an untrusted value already satisfies it.
+
+**`-0` is finite and may legitimately appear in live `StoryState` (Section 24.22: "existing `-0` behavior is preserved exactly... unnormalized"), but `JSON.stringify(-0)` emits the text `0`, not `-0` — so a `-0` value does not survive a literal `JSON.stringify`/`JSON.parse` round-trip; it silently becomes `+0`.** This is accepted as a harmless representational quirk, not a correctness gap requiring a custom encoding: AfterText's expression language has no operator capable of ever distinguishing `-0` from `0` in the first place — `==`/`!=`/`<`/`<=`/`>`/`>=` (Section 17.8) all use ordinary numeric comparison, under which `-0` and `0` compare exactly equal, and no `Object.is`-style identity or sign-detecting builtin exists. No authored condition or query can therefore ever observe whether a restored value was originally `-0` or `0`, so normalizing to `+0` across a JSON round-trip changes no observable story behavior. This does not need, and does not get, a dedicated JSON-safe encoding.
+
+`snapshotPlayer` may return a `PlayerSnapshot` whose `runtimeState` shares object identity with the live `PlayerState` it was taken from, exactly consistent with this project's existing immutable-by-convention policy (Section 17.5, 18.9): nothing in this codebase deep-copies a `RuntimeState`/`PlayerState` on every return already, and Save/Restore introduces no new requirement to start doing so. This is safe under the same assumption the rest of the codebase already relies on — a `readonly`-typed value is never mutated in place — not a new, weaker guarantee introduced here.
+
+`position` and `current` are public **storage** fields — they appear in the type, may be stored, copied, `JSON.stringify`d, `JSON.parse`d, and round-tripped by a host — but are semantically **opaque**: only AfterText interprets their internal shape, and consumers must not depend on it. This is Model B applied specifically to these two fields (Section 33.5's ownership discussion does not apply here; this is about the cursor-derived payload, not document identity). Opacity is what lets Runtime's actual `ExecutionCursor`/`CursorFrame` internal representation keep evolving freely: `PlayerSnapshot.position` does not expose or freeze that source shape, and a future snapshot format version may encode position differently without that being a breaking change to anything a consumer is entitled to inspect. Snapshot encoding and the Runtime cursor's internal representation are deliberately separate concepts.
+
+## 33.7 Snapshot Current-Result Representation
+
+Status: LOCKED
+
+The snapshot persists enough opaque information to identify the current suspension point and result. **It never serializes AST-bearing `ExecutionResult` objects verbatim.** On restore, any result whose variant carries an AST reference (`content.block`, `presentation.command`, `dialogue`'s speaker/content) is **re-derived** — not replayed — from the resolved structural position against the given, freshly compiled `StoryDocument`:
+
+```text
+not started   — stored: an explicit opaque "not started" marker (PlayerState.current
+              was null — createPlayer has run but no advance()/selectPlayerChoice()
+              yet); no structural position exists yet
+              re-derived: nothing; current is restored directly as null
+
+content      — stored: opaque position/current descriptor
+              re-derived: the content block at the resolved position
+
+dialogue     — stored: opaque position/current descriptor
+              re-derived: speaker + inline content from the corresponding DialogueNode
+
+presentation — stored: opaque position/current descriptor
+              re-derived: the Presentation command from its corresponding AST block
+
+choice       — stored: opaque position descriptor PLUS the already-offered items'
+              stable fields only ({ text, target }[] — never the transient index,
+              which Section 17.7 already locks as "never persisted"; restore
+              rebuilds each item's index fresh as its own zero-based array
+              position, never trusting a persisted index value)
+              NOT re-derived by re-running Choice filtering: see the dedicated
+              rule below — restore reuses the persisted text/target pairs verbatim
+
+navigation    — persisted directly: from / to (already plain data); no structural
+              position exists to persist (cursor is already fully reset, Section 17.7)
+completed     — persisted directly: the discriminator only; no structural position
+              exists to persist (cursor is already fully reset, Section 17.7)
+error         — stored: opaque position descriptor, including each currently-open
+              frame's real exposure status (Section 33.4 — captured the same
+              way for every kind, but only error's may actually be false,
+              since the other four kinds are already guaranteed recorded)
+              persisted directly: the error's kind/message/reason; its SourceSpan,
+              if any, is dropped (see the dedicated rule below)
+```
+
+No snapshot variant ever stores a raw AST reference. **Re-derivation is distinct from re-execution and must never be confused with it:** reading an AST node at the resolved structural position to reconstruct a visible result must not execute a `@set`, record Reader Memory, apply a Presentation command, or navigate — those already happened, exactly once, before the snapshot was taken (Section 33.3), and restore must not repeat any of them (Section 33.9).
+
+**Choice items are persisted, never re-filtered, because re-filtering would observe the wrong Reader Memory state.** `advance()` (`packages/runtime/src/execution/advance.ts`) calls `filterChoiceItems` *before* `recordObservableExposure` folds this same step's scene-visit/Variant-seen recording into `reader` — so the item set actually offered reflects Reader Memory as it stood *before* this step's own exposure recording, while the `runtimeState` a snapshot captures already reflects Reader Memory *after* it. A Choice item conditioned on `visited(...)`/`seen_variant(...)` of the scene/Variant occurrence currently being entered would therefore see a different condition result if restore re-ran `filterChoiceItems` against the snapshotted `runtimeState` — producing an item set that does not match what was actually offered live, violating Section 33.9. Because `AvailableChoiceItem`'s `text`/`target` fields are already plain, non-AST data, there is no reason to re-derive them at all: the snapshot persists the exact `text`/`target` pairs `advance()` already computed (never the `index` field itself, Section 17.7, 33.7), and restore reuses those pairs verbatim, assigning each a fresh zero-based `index` by array position rather than trusting any persisted one. The resolved `ChoiceNode` is still used — to confirm the structural position itself still resolves, and to validate the persisted pairs against its own authored items (Section 33.8) — but never to recompute which items are offered.
+
+**A restored `error` result never retains its original `SourceSpan`.** Section 33.5's semantic-document compatibility model explicitly permits a freshly compiled document whose source positions differ from the one the snapshot originated from (formatting-only edits). A verbatim-persisted `span` would then point at the wrong offsets in the new document — potentially highlighting unrelated text. Re-deriving a precise span is not generally possible either: many runtime errors are anchored to a specific sub-expression (Section 17.11), a level of detail finer than this design's structural position (scene/branch/block granularity) can resolve. Restore therefore always reconstructs an authored runtime error with `span` absent, regardless of whether the originally-snapshotted error carried one — the error's `kind`/`message`/any other plain data is otherwise preserved exactly. This is a deliberate, narrow loss of position precision on an already-terminal/display-only value, not a correctness gap: nothing downstream of an `error` result depends on its `span` to continue execution.
+
+## 33.8 `restorePlayer` Validation and Failure
+
+Status: LOCKED
+
+```ts
+restorePlayer(document: StoryDocument, snapshot: unknown): RestorePlayerResult
+```
+
+The `snapshot` parameter is typed `unknown`, not `PlayerSnapshot`. A realistically-sourced snapshot has always round-tripped through `JSON.parse` from some external, untrusted store — TypeScript types do not validate parsed JSON, and typing the parameter as `PlayerSnapshot` would invite exactly the false-security pattern of a host casting untrusted data (`as PlayerSnapshot`) to satisfy the signature. Accepting `unknown` costs nothing: a real `PlayerSnapshot` value (e.g. straight from `snapshotPlayer()` in the same session) remains a valid argument, since every value is assignable to `unknown`.
+
+Result is a synchronous errors-as-data union, consistent with this project's existing conventions (no `Promise`, no `throw` for ordinary validation failure, no callback):
+
+```ts
+type RestorePlayerResult =
+  | { readonly ok: true; readonly state: PlayerState }
+  | { readonly ok: false; readonly error: PlayerRestoreError };
+```
+
+`PlayerRestoreError` is a small, closed taxonomy — no diagnostic-code infrastructure is introduced:
+
+```text
+unsupportedFormatVersion
+documentMismatch
+malformedSnapshot      (may carry a human-readable reason)
+unresolvablePosition   (may carry a human-readable reason)
+```
+
+Before constructing any live state, validation proceeds field-by-field and never trusts an untrusted parsed value's own key set to be safe without checking it first:
+
+```text
+1. snapshot is a plain object with the expected top-level shape
+2. formatVersion matches the supported value          -> else unsupportedFormatVersion
+3. documentFingerprint matches the given document's own computed
+   fingerprint (Section 33.5)                          -> else documentMismatch
+4. runtimeState has the minimum required shape, AND every numeric
+   StoryValue in runtimeState.story is finite — a shape-only
+   `typeof x === "number"` check is not sufficient, since it is true
+   for NaN/Infinity/-Infinity as well (Section 33.6). The same
+   independent finiteness requirement extends to every
+   `visitedScenes[*].visitCount`/`seenVariants[*].seenCount` in
+   `runtimeState.reader`: each must additionally be a positive finite
+   integer, since live Reader Memory (`recordSceneVisit`/
+   `recordVariantSeen`, `packages/runtime/src/reader/`) only ever
+   produces positive integer counts starting at 1 — a `NaN`,
+   `Infinity`, negative, or fractional count describes a `ReaderState`
+   no real session could have produced, and later memory-query
+   builtins (Section 17.15) and exposure recording would otherwise
+   operate on it as if it were valid. Each `seenVariants` entry whose
+   `seenCount` is exactly `1` must additionally have
+   `firstSeenBranchId === lastSeenBranchId`: live `recordVariantSeen`
+   always writes both fields from the *same* `branchId` on the single
+   call that creates a new entry (`previous` undefined, Section 17.9's
+   own "resolve != seen" boundary), so `seenCount === 1` with two
+   different branch ids describes a `ReaderState` no live session
+   could have produced — it would misrepresent the restored session's
+   Variant history to `last_seen_variant_branch(...)`'s callers as if
+   the reader had seen two different branches when only one call ever
+   happened. Each `seenVariants` entry's `firstSeenBranchId`/
+   `lastSeenBranchId` must additionally resolve to a real branch of the
+   `VariantNode` named by that entry's own key:
+   live `recordVariantSeen` (`packages/runtime/src/reader/
+   variant-memory.ts`) only ever stores a `branchId` that genuinely
+   belongs to the `variantId` it is keyed under (`advance()` always
+   calls it with both ids taken from the same resolved Variant
+   occurrence), so a restored entry whose key does not match any
+   `VariantNode.id` in the given document, or whose branch id is not
+   among that `VariantNode`'s own `branches[*].branchId`, describes a
+   `ReaderState` no live session could have produced. This matters
+   beyond mere data integrity: `last_seen_variant_branch(variantId)`
+   (Section 17.15) returns `lastSeenBranchId` directly to authored
+   expressions, so an unresolvable or cross-Variant branch id would let
+   a restored session evaluate an authored condition against a branch
+   identity live execution could never have produced. The same
+   requirement applies to `visitedScenes`: every key must name a real
+   scene in the given document — live `recordSceneVisit`
+   (`packages/runtime/src/reader/scene-memory.ts`) only ever creates an
+   entry for the actual active, resolved scene, and the public
+   `hasVisitedScene`/`getSceneVisitCount` helpers (exported from
+   `@aftertext/runtime`) would otherwise expose an injected, impossible
+   scene-visit entry after restore exactly as `last_seen_variant_branch`
+   would expose an injected branch id.
+   `runtimeState.navigation.sceneId`
+   must additionally name a real scene in the given document — this
+   check applies regardless of `current.type`, not only when
+   `current.type === "navigation"` (step 6 below): `advance()` always
+   looks the scene up by this field alone (`packages/runtime/src/
+   execution/advance.ts`) on the very next call, including for a
+   restored "not started" or "completed" snapshot, where step 6 skips
+   position resolution entirely and this is the only remaining check
+   that the session is resumable at all; without it, a fingerprint-
+   matching snapshot could still name a scene the document does not
+   have and fail on the next `advancePlayer()` with `invalidSceneTarget`
+   instead of actually resuming. For `current.type === "not started"`
+   specifically, `runtimeState` as a whole must equal exactly what
+   `createPlayer(document)` produces: `createPlayer`
+   (`packages/player/src/create-player.ts`) always seeds it via
+   `createRuntimeState(document)` — the document's own
+   `initialState`, an empty `ReaderState` (`visitedScenes`/
+   `seenVariants` both `{}`), and `navigation.sceneId` equal to
+   `document.entryScene` — so a genuine unstarted `PlayerState` can
+   never carry arbitrary `StoryState` values, any populated Reader
+   Memory, or a non-entry scene. A "not started" snapshot claiming
+   otherwise describes a state `createPlayer` could never have
+   produced and must be rejected, not merely accepted because its
+   fingerprint matches and its individual fields are each
+   independently well-typed.                             -> else malformedSnapshot
+5. position / current are JSON-compatible in shape      -> else malformedSnapshot
+6. unless current.type is "not started", "navigation", or "completed"
+   (Section 33.7 — none of these three has a structural position to
+   resolve at all, so this step is skipped entirely for them; see their
+   own checks below instead) — the structural position resolves
+   in-bounds against the given document (scene exists, conditional
+   branchIndex/variant id in range). For `content`/`dialogue`/
+   `presentation`/`error` specifically, the deepest/active frame's
+   block index is in-bounds at any value from `0` up to and including
+   that frame's own block count: `advance()` already leaves that
+   frame's index exactly at its block count — one past the last valid
+   position — immediately after producing the last
+   content/dialogue/presentation result inside it (the index is only
+   incremented *before* the frame actually pops on a later `advance()`
+   call), so this one-past-end sentinel is a valid, common position for
+   these kinds, not an out-of-bounds one; only a negative index, or one
+   exceeding the block count, is out of bounds for them. `error` shares
+   this same allowance, not a stricter one, even though a *progressive*
+   error (one failing while `advance()` evaluates the block at the
+   frame's current index, Section 17.11) can never itself reach the
+   one-past-end sentinel: `selectChoice`'s own error paths
+   (`invalid-choice-selection`, `packages/runtime/src/execution/
+   choice.ts`) simply echo the suspension's existing `cursor` verbatim,
+   with no position check of their own, whenever `selectPlayerChoice`
+   is called while *not* actually suspended on a Choice (or with an
+   out-of-range index) — including while suspended on the very last
+   content/dialogue/presentation block of a frame, whose cursor is
+   already at the one-past-end sentinel at that moment. An `error`'s
+   possible cursor shapes are therefore the union of every other kind's
+   possible shapes, not a narrower one of its own; restoring the
+   sentinel for an echoed selection error and later continuing from it
+   correctly pops/completes that frame — exactly what would already
+   have happened had the erroneous selection never been attempted — so
+   permitting it is not a double-application risk, merely a faithful
+   reconstruction of whatever cursor the error actually carried live.
+   A `choice` suspension's active frame remains the one exception among
+   all of these: its index is never incremented past the `ChoiceNode`
+   itself (Section 33.7), so resolution must find a `ChoiceNode` at
+   that exact index, with no one-past-end allowance for it
+   specifically. (An `error` whose cursor is empty altogether — e.g.
+   `invalidSceneTarget` — remains separately valid, Section 17.11; that
+   case has no frame at all to bound.) For `navigation`
+   specifically, in place of position resolution: `current.to` must
+   equal `runtimeState.navigation.sceneId` exactly — live navigation
+   always sets both to the same target (`navigateTo`,
+   `packages/runtime/src/execution/navigate.ts`) — which, combined with
+   step 4's now-universal `runtimeState.navigation.sceneId` existence
+   check, already guarantees `to` names a real scene; `current.from`
+   has no equivalent universal check and must additionally be
+   validated to name a real scene in the given document on its own. A
+   snapshot where `from`/`to` disagree, or `from` names a scene the
+   document does not have, describes a combination live navigation
+   could never produce and is rejected the same way an unresolvable
+   structural position is, even though `navigation` itself has no
+   cursor position (Section 33.7). **For any open frame carried by a
+   `content`/`dialogue`/`presentation`/`choice`/`error` snapshot** —
+   the one check applies uniformly, with no kind-specific branching,
+   consistent with `toCursorPosition` itself capturing flags uniformly
+   (Section 33.4): whenever a frame's captured `visitRecorded`/
+   `seenRecorded` flag is `true` (which the four live kinds always
+   are, and `error` sometimes is), `runtimeState.reader` must already
+   contain the corresponding entry — `visitedScenes[sceneId]` for the
+   scene frame, `seenVariants[variantId]` for an active Variant-branch
+   frame — with that Variant entry's own `lastSeenBranchId`
+   additionally equal to the frame's own active `branchId`. A live
+   active Variant frame's branch is always its occurrence's most
+   recently seen one by construction: `recordObservableExposure`
+   either just recorded it as such (if this is the occurrence's first
+   qualifying result) or it was already true from an earlier result
+   within the very same still-open occurrence — including for an
+   `error` occurring after that earlier result — and nothing else can
+   retarget `lastSeenBranchId` while that occurrence remains open, so
+   a snapshot positioned inside, say, a `mood`/`happy` branch whose
+   `seenVariants.mood.lastSeenBranchId` is `"sad"` describes a
+   combination no live suspension could ever actually be in, even
+   though the entry itself otherwise resolves correctly (Section
+   33.4's own branch-identity check). Live `recordSceneVisit`/
+   `recordVariantSeen` always writes the entry *before* the matching
+   flag is ever set `true` (Section 17.9, 33.4), so a `true` flag
+   without the entry is impossible regardless of suspension kind, and
+   accepting it anyway would be worse than merely inaccurate — since
+   restore reconstructs the frame exactly as captured, a missing
+   entry paired with a wrongly-trusted `true` could never self-correct
+   on any later `advance()` either, permanently under-counting a
+   visit/occurrence the restored session is visibly showing right now.
+   A captured flag of `false` (only possible for `error`, Section
+   33.4) carries no such requirement — that is the ordinary
+   still-pending case this whole mechanism exists to support. The same
+   entry requirement extends separately to `completed`, which has no
+   open frame at all to carry a flag: a genuine `completed` result
+   always has a `visitedScenes[runtimeState.navigation.sceneId]` entry
+   regardless — either recorded earlier in the same episode by an
+   ordinary qualifying result, or recorded inline by `advance()`'s own
+   "qualifying empty" branch immediately before returning `completed`
+   (Section 17.9, `packages/runtime/src/execution/advance.ts`) — so a
+   `completed` snapshot missing that entry is rejected the same way,
+   checking only the current scene's own visit entry for it.
+                                                  -> else malformedSnapshot
+7. the current descriptor re-derives to a valid result; for `choice`
+   specifically, this means validating the persisted `{ text, target }`
+   pairs (Section 33.7 — `index` is never part of the persisted shape
+   at all, so there is no persisted index to validate): they must be
+   non-empty (a live `choice` result never has zero items —
+   `filterChoiceItems` returning no items becomes an `error` result
+   instead, Section 17.7, so a `choice` snapshot claiming otherwise
+   describes an impossible live state) and must form an order-preserving
+   subsequence of the resolved `ChoiceNode`'s own authored items by
+   exact `text`/`target` match — i.e. walkable against `node.items` in
+   order, skipping zero or more authored items between consecutive
+   persisted ones, never persisted items in a different order or with a
+   `text`/`target` that does not exactly match some authored item at
+   that position. This rejects an injected pair whose `text`/`target`
+   was replaced with arbitrary values, or a target the authored Choice
+   never actually offered, without evaluating any item condition —
+   `filterChoiceItems` only ever removes items by condition, it never
+   reorders or rewrites `text`/`target` (Section 17.7's own
+   construction), so this is exactly the shape any legitimately-filtered
+   result already has. **Being a valid subsequence is necessary but not
+   sufficient: every authored item with no `condition` at all must also
+   be present.** `filterChoiceItems`'s own construction only ever
+   filters items that *have* a condition (`if (item.condition) { ... }`,
+   Section 17.7) — an unconditional item is unconditionally pushed every
+   time, so it can never be legitimately missing from any live result.
+   A persisted subsequence that skips an authored unconditional item —
+   even though skipping is otherwise allowed for conditioned items —
+   therefore still describes an impossible live state and must be
+   rejected the same way. Reconstruction then assigns each validated pair
+   a fresh `index` equal to its own zero-based position in that
+   (now-validated) persisted array — never a value read from the
+   snapshot — exactly matching what live `filterChoiceItems` itself
+   already does (`index: items.length` at push time), and exactly what
+   the Web Renderer's `ChoiceView`/`selectChoice` dispatch needs to find
+   the clicked item back by array position (Section 17.7). Never
+   re-run Choice filtering itself (Section 33.7, 33.9). For `error`,
+   discard any persisted span rather than validating it (Section 33.7),
+   and reconstruct each open frame's captured exposure status rather
+   than assuming it recorded (Section 33.4).
+                                                            -> else unresolvablePosition
+```
+
+Only after every check passes is live state reconstructed, field-by-field, from the validated values. Step 6's position resolution calls Runtime's public `fromCursorPosition(document, runtimeState, position, resultKind)` (Section 33.2, 33.4) — one of the two narrow, genuinely public Runtime additions this design requires, forced by Runtime's package `exports` boundary (Section 33.2) — getting back both the reconstructed `ExecutionCursor` and (for `content`/`dialogue`/`presentation`/`choice`) the resolved `StoryBlock` needed to rebuild the AST-bearing parts of step 7's result (Section 33.4, 33.7), with `runtimeState.navigation.sceneId` cross-checked internally against the position's own embedded scene id (Section 33.4); Player's own code is where that call happens and where its failure is translated into `PlayerRestoreError`.
+
+**Reconstructed live state does not alias the caller's `snapshot` argument or any of its nested values.** Because every field is validated and rebuilt in step 6–7's reconstruction, not referenced in place from the untrusted input, a caller mutating its own parsed snapshot object after calling `restorePlayer` — including the common case of a reused `JSON.parse` result — can never retroactively affect the returned, already-independent `PlayerState`.
+
+**Reconstruction must preserve the existing prototype-safety guarantees already locked for `ReaderState`/`StoryState` (Section 25.55, `prototype-names.test.ts`).** `RuntimeState`'s string-keyed Records (`StoryState`'s variable map, `ReaderState.visitedScenes`/`seenVariants`) must come out of restore as ordinary plain objects, exactly as they already are after any `advance()` call. The specific risk is not reusing an untrusted key's *value* — it is copying an untrusted key *set* through a mechanism that invokes an inherited setter: `Object.assign(target, parsed)` or an imperative `target[key] = parsed[key]` loop both go through `[[Set]]`, so a key literally named `__proto__` in the parsed input can reassign `target`'s actual prototype rather than becoming an ordinary own property. Object-literal spread (`{ ...parsed }`) and `JSON.parse` itself do not have this problem — they always create literal own data properties, never invoke a prototype setter — which is why reconstruction must build each Record this way (or via an equivalently safe own-property copy), never via `Object.assign` onto a literal target or a bracket-assignment loop keyed by untrusted names. This mirrors the existing `__proto__`/`constructor`/`prototype` handling already locked for `@set` and Reader Memory keys (Section 25.55) — Save/Restore does not introduce a new exception to it.
+
+## 33.9 Restore Correctness: No Double Application
+
+Status: LOCKED
+
+Restoring a snapshot **must not re-execute already-consumed story operations.** In particular, restore must never duplicate: `@set` effects, scene-visit recording, variant-seen recording, navigation side effects, or Presentation application. Restore reconstructs a position and re-derives a result (Section 33.7) rather than replaying execution from the top of a scene.
+
+This is sound specifically because of the invariant Section 33.3 and 33.4 already establish: `toCursorPosition` always captures each open frame's real exposure-flag status, uniformly across every suspension kind (Section 33.4 — not kind-dependent, since the encoder has no way to know the kind and must behave identically given identical inputs). At every `content`/`dialogue`/`presentation`/`choice` suspension point, all pending Reader-Memory exposure recording for open frames has already completed and been folded into the `RuntimeState` the snapshot captures, so the real flag captured for those four kinds is always already `true` — restoring it is equivalent to treating the frame as already recorded, with no window in which restoring could cause a second recording. An `error` suspension is where the real flag can genuinely differ (Section 33.4): because `recordObservableExposure` is never called before an error, a captured `false` reflects a real, still-pending exposure, and restore must reconstruct it exactly as captured rather than assuming it is `true` — getting this wrong would cause an under-count on a later successful retry, not a double-count, but it is the same correctness property (restored behavior must match what the original in-memory session would have done) and is covered by the same conformance requirement (Section 33.20). The same reasoning applies to `@set`: `StoryState` updates are already folded into the snapshotted `RuntimeState`, so restoring it is not re-running the `@set` that produced it.
+
+This is also exactly why Choice is persisted-and-reused rather than re-filtered on restore (Section 33.7): re-running `filterChoiceItems` against the snapshotted (already-post-exposure-recording) `RuntimeState` would evaluate a `visited(...)`/`seen_variant(...)` condition against Reader Memory *after* this step's own exposure recording, whereas the item set actually offered live was filtered *before* it (`advance()`'s own ordering). This is not a double-application of an effect in the Section 33.9 sense, but the same class of bug — restore silently observing a different, later Reader-Memory state than the one that actually produced the suspended result — and is why Choice is the one suspension kind this design does not re-derive from the document at all.
+
+## 33.10 PresentationSnapshot
+
+Status: LOCKED
+
+`@aftertext/web-renderer` owns Web Presentation persistence; this does not move Presentation semantics into Runtime or Player (Section 19.19, 20.5 unchanged).
+
+**`PresentationState` (Section 20.5) remains internal and is not made public merely to support snapshots.** Instead, a separate, independent public schema is introduced:
+
+```ts
+interface PresentationSnapshot {
+  readonly formatVersion: 1;
+  readonly background: string | null;
+  readonly layer: string | null;
+  readonly cameraZoom: number;
+  readonly music:
+    | { readonly track: string; readonly volume?: number }
+    | null;
+  readonly sprites: readonly {
+    readonly id: string;
+    readonly image: string;
+    readonly position: "left" | "center" | "right";
+  }[];
+}
+```
+
+(Field names follow the current `PresentationState` shape as of Section 20.5/22.6/23.5/31.5; adjust only if implementation finds an exact field name differs — the semantic fields above must be preserved.) `PresentationSnapshot` and `PresentationState` are structurally similar today but **contractually separate** — a future internal `PresentationState` change does not automatically change this public contract, and vice versa.
+
+**`music.volume` is an optional property (`volume?: number`), not a required property typed `number | undefined`.** The internal `MusicPresentationState.volume: number | undefined` reflects "no authored volume" as the value `undefined`, but `JSON.stringify` drops an object property whose value is `undefined` entirely — a required field typed to include `undefined` would misdescribe what a JSON round-trip actually produces (the key would vanish, not survive as `undefined`). An **absent** `volume` means exactly the same thing the internal `undefined` value already means: no authored volume, renderer default applies (Section 23.9). This keeps `PresentationSnapshot` honestly JSON-compatible end to end, consistent with Section 33.16's "ordinary JSON-compatible values" claim, which otherwise could not hold for this field.
+
+**A non-finite live `volume` is normalized to absent at snapshot time, not rejected at restore time.** Unlike `cameraZoom` (Section 33.11), whose finiteness is guaranteed inside `applyPresentation` itself — the exact function that constructs `PresentationState`, with no bypass possible — `music.volume`'s only finiteness guarantee comes from a different package entirely: the compiler's `AT1302` diagnostic (Section 24.5, 24.17). `applyPresentation`'s own `Music` case (`packages/web-renderer/src/presentation-state.ts`) stores `command.volume` completely unguarded. A `StoryDocument` not produced through the ordinary `compile()` path — exactly the scenario Section 23.9's own already-locked renderer policy defends against, by explicitly mapping `NaN`/`Infinity`/`-Infinity` to the same playback volume as `undefined` — could therefore in principle reach the renderer with a non-finite `volume`, and `snapshotPresentation` must not crash or silently produce a lossy snapshot for it (`JSON.stringify` would otherwise turn a non-finite number into the literal value `null`, which does not round-trip back to the same thing). `snapshotPresentation` therefore applies the identical normalization already locked in Section 23.9 at the moment it builds a `PresentationSnapshot`: a non-finite live `volume` is captured as absent, exactly as if no `volume` had been authored — not stored raw, not rejected. This is lossless in every realistic case (a `volume` produced by any document that actually passed `compile()` is always finite, Section 24.17, so normalization is a no-op for it) and gracefully degrades the one pathological case to the same bucket the renderer already treats it as. Because of this, `restorePlayer`/`restoreSnapshot` validation requiring a finite `volume` when present (Section 33.11) is never in tension with a `PresentationSnapshot` `snapshotPresentation` itself actually produces — only a snapshot from some other, untrusted source could still claim a non-finite `volume`, and rejecting that one is correct.
+
+`PresentationSnapshot` never includes ephemeral state, which is always recreated fresh on restore rather than persisted: `TimedPresentationGate` state, any timeout handle or remaining-duration value, `HTMLAudioElement` or any browser media object, a playback `Promise`, an event listener, a focus ref, a React ref, or any DOM node (Section 33.13–33.15).
+
+**`snapshotPresentation`/`restorePresentation` remain internal — not publicly exported**, unless implementation later proves the locked React integration path (Section 33.11) impossible. The current web-renderer public surface is exactly `AfterTextPlayer`/`AfterTextPlayerProps` (Section 32.26), with no identified consumer needing `PresentationSnapshot` production/consumption outside that component; the public path for producing or consuming one is exclusively `AfterTextPlayerHandle` (Section 33.11). This avoids manufacturing public API surface for a hypothetical standalone headless-renderer consumer that does not currently exist.
+
+## 33.11 `AfterTextPlayerSnapshot` and React Integration
+
+Status: LOCKED
+
+For React convenience, `@aftertext/web-renderer` composes the two independently-owned snapshot types:
+
+```ts
+interface AfterTextPlayerSnapshot {
+  readonly player: PlayerSnapshot;
+  readonly presentation: PresentationSnapshot;
+}
+```
+
+This composition does not make `@aftertext/player` depend on `@aftertext/web-renderer` (Section 19.19 unchanged) — `web-renderer` already depends on `player`, so composing their types adds no new or reversed dependency edge. `PlayerSnapshot` remains independently owned and independently producible by Player alone; `PresentationSnapshot` remains independently owned and independently producible by the Web Renderer alone (Model B, Section 33.2).
+
+`AfterTextPlayer` becomes ref-capable, using React's `forwardRef`/imperative-handle mechanism, compatible with both React 18 and React 19 as already tested by this repository (Section 19.2). **`forwardRef` is required, not a stylistic choice:** React 19's own ref-as-a-plain-prop convention does not work on React 18, which this package's peer range still supports (`^18.0.0 || ^19.0.0`, Section 19.2) — `forwardRef` is the only mechanism that gives genuine ref support across both. Ordinary JSX usage without a ref is behaviorally unchanged — `<AfterTextPlayer {...props} />` renders identically either way.
+
+**This is a real, scoped breaking change to the `AfterTextPlayer` export's own shape, not a fully additive one** — correcting the "no existing export's shape changes" claim in Section 33.18 for this one export specifically. `AfterTextPlayer` is currently an ordinary exported function declaration (`packages/web-renderer/src/after-text-player.tsx`); wrapping it in `forwardRef(...)` replaces it with a `ForwardRefExoticComponent` object, which is not directly callable as a function and for which `typeof AfterTextPlayer === "function"` is `false`. A consumer that only ever uses `<AfterTextPlayer ... />` in JSX is unaffected, but one that calls `AfterTextPlayer(props)` directly, or branches on its `typeof`, would break — and `packages/web-renderer/api-baseline.json`'s tracked shape for this export changes accordingly, not merely gains a new sibling export. This narrow exception to additivity is accepted because no alternative preserves both cross-version ref support and the exact current callable-function shape at once.
+
+```ts
+interface AfterTextPlayerHandle {
+  getSnapshot(): AfterTextPlayerSnapshot;
+  restoreSnapshot(snapshot: unknown): AfterTextPlayerRestoreResult;
+}
+```
+
+`restoreSnapshot`'s parameter is `unknown`, for the same reason as `restorePlayer` (Section 33.8): React restore performs real runtime validation of untrusted, externally-sourced JSON, never a type-level assertion.
+
+A small web-renderer-owned error model covers Presentation's own, narrower failure surface — Presentation has no document or structural-position concept, so it needs neither `documentMismatch` nor `unresolvablePosition`:
+
+```text
+unsupportedFormatVersion
+malformedSnapshot
+```
+
+No separate error kind is needed for timer/audio/focus state, because none of it is ever persisted (Section 33.13–33.15) and therefore none of it can fail to restore.
+
+The combined result, with no `Promise` and no throw for ordinary validation failure:
+
+```ts
+type PresentationRestoreError =
+  | { readonly kind: "unsupportedFormatVersion" }
+  | { readonly kind: "malformedSnapshot"; readonly reason: string };
+
+type AfterTextPlayerRestoreError =
+  | { readonly kind: "invalidPlayerSnapshot"; readonly detail: PlayerRestoreError }
+  | { readonly kind: "invalidPresentationSnapshot"; readonly detail: PresentationRestoreError };
+
+type AfterTextPlayerRestoreResult =
+  | { readonly ok: true }
+  | { readonly ok: false; readonly error: AfterTextPlayerRestoreError };
+```
+
+Targeted Presentation validation (no generic schema library) covers at least: `formatVersion`; `background`/`layer` are `string | null`; `cameraZoom` is a finite number **greater than zero**; `music` is `null` or an object with `track: string` and, when present, a finite `volume`; `sprites` is an array whose entries each have `id: string`, `image: string`, and `position` one of `"left" | "center" | "right"`, **with no two entries sharing the same `id`.** Live `PresentationState` can never contain a duplicate sprite id by construction (Section 31.5–31.6: `ShowSprite` always replaces an existing id in place rather than appending a second one) — a snapshot claiming otherwise describes a Presentation state no actual session could have produced and must be rejected as `malformedSnapshot`, not silently accepted. The `> 0` requirement on `cameraZoom` is likewise not optional: live `PresentationState.cameraZoom` can never be zero or negative by construction (`isValidCameraZoom`, Section 22.4–22.5 — `applyPresentation`'s own Camera case only ever accepts a finite value greater than zero). Restore installs `PresentationSnapshot` fields directly rather than routing them through that guard (Section 33.12), so an untrusted snapshot claiming `cameraZoom: 0` or a negative value would otherwise reach the renderer as an impossible, never-live-producible state and surface as an invalid `scale(...)` transform; validation must reject it as `malformedSnapshot` with the same `> 0` invariant `applyPresentation` already enforces, not merely a finiteness check.
+
+## 33.12 Atomic Restore
+
+Status: LOCKED
+
+`restoreSnapshot` validates the `PlayerSnapshot` half and the `PresentationSnapshot` half, resolves Player state, and prepares Presentation state — all before mutating any live React state. If, and only if, both halves are fully valid does it apply the complete restored session atomically (one state update); if either half is invalid, nothing changes. There is no half-restored Player/Presentation state at any point, matching this section's suspension-point model (Section 33.3): a restore either fully succeeds or has no observable effect, mirroring Restart's existing atomic `{ player, presentation }` reset (Section 20.23).
+
+A restored `PresentationSnapshot` was captured representing a Presentation command already having been applied (Section 33.3); restoring therefore **sets the restored Presentation state directly** and must not pass the restored `current` result back through the ordinary `acceptPlayerState`/`applyPresentation` transition path — doing so would apply that command a second time, violating Section 33.9's no-double-application invariant for the Presentation case specifically.
+
+**When `current.type === "presentation"`, the two halves must be cross-validated against each other, not only validated independently.** `PlayerSnapshot` and `PresentationSnapshot` are independently owned (Section 33.2) and independently valid in isolation, but a live session can never actually disagree between them: whenever `advancePlayer`'s result is a `presentation` suspension, the *same* renderer transition has already applied that exact command to `PresentationState` via `applyPresentation` (Section 20.9–20.10) — so an untrusted pairing of an otherwise-valid `PlayerSnapshot` suspended on, say, `Background("red")` with an otherwise-valid `PresentationSnapshot` whose `background` is `"blue"` describes a combination no live session could ever produce, even though neither half is individually malformed. `restoreSnapshot` must therefore check, using the resolved command's own deterministic effect (`applyPresentation`, `packages/web-renderer/src/presentation-state.ts`):
+
+```text
+Background(image) / Layer(image)  -> PresentationSnapshot.background/layer must equal image exactly
+Camera(to) with a valid to (>0, finite) -> PresentationSnapshot.cameraZoom must equal to exactly
+Camera(to) with an invalid to     -> no constraint (applyPresentation leaves cameraZoom at
+                                      whatever it already was, which restore cannot independently verify)
+Music(track, volume)              -> PresentationSnapshot.music.track must equal track exactly;
+                                      volume is compared using the same normalization
+                                      snapshotPresentation itself applies (Section 33.10) — if
+                                      the resolved command's volume is finite, the snapshot's
+                                      volume must equal it exactly; if the resolved command's
+                                      volume is non-finite, the snapshot's volume must be absent,
+                                      not literally equal to that non-finite value (which could
+                                      never survive the JSON round-trip anyway, Section 33.10)
+ShowSprite(id, image, position)   -> that id's entry in PresentationSnapshot.sprites must have
+                                      exactly that image/position
+HideSprite(id)                    -> that id must be absent from PresentationSnapshot.sprites
+Sfx / Pause                       -> no constraint (neither ever changes PresentationState)
+```
+
+A mismatch is rejected as `invalidPresentationSnapshot`/`malformedSnapshot` (Section 33.11) before either half is applied — consistent with the atomic all-or-nothing rule above.
+
+## 33.13 Timed Presentation Restore
+
+Status: LOCKED
+
+`TimedPresentationGate` state (Section 21.8, 22.18) — elapsed time, remaining time, the timer handle, and unlocked status — is not persisted. A restored timed Presentation (Pause, or a timed Camera) begins fresh and locked, following the existing Restart precedent (Section 21.14, 22.8): a new timer is created exactly as it would be for a newly-reached timed suspension, with no attempt to reconstruct elapsed or remaining duration from the time the snapshot was taken.
+
+## 33.14 Music/Audio Restore
+
+Status: LOCKED
+
+`PresentationSnapshot.music` restores declarative state only (track, volume) — no playback position, `HTMLAudioElement`, `Promise`, or event listener is ever persisted (Section 33.10). If playback resumes after a restore, it follows existing Music semantics exactly: restart from the beginning (Section 23.6–23.8), subject to the same browser user-activation requirements already locked for ordinary playback (Section 23.17). Restore does not promise autoplay that browser policy may block.
+
+**A successful `restoreSnapshot` must stop any Music/Sfx audio objects owned by the session being replaced, before applying the restored Presentation state — exactly mirroring the existing Restart precedent.** Restart already calls both `stopMusicElement`/`stopAndClearSfx` as cleanup, before resetting session state (`packages/web-renderer/src/after-text-player.tsx`, Section 23.23/23.25); restoring over a live session is the same kind of session replacement and needs the identical cleanup — without it, a currently-playing old track or an active Sfx instance would keep playing audibly even after `PresentationSnapshot.music` has replaced it with a different track or `null`, since nothing else would ever tell the old browser-owned audio object to stop. This cleanup is cleanup only, exactly like Restart's own (Section 23.23) — it never fabricates new playback itself, and it must happen only as part of a *successful* restore's atomic state application (Section 33.12): a failed validation leaves the live session, and whatever it was already playing, completely untouched.
+
+## 33.15 Focus Behavior
+
+Status: LOCKED
+
+No new accessibility/focus policy is introduced. Content restored after a `restoreSnapshot` call reuses the existing focus mechanism and carries the same focus expectations as ordinary progression or Restart (Section 32.27, 19.18). Focus refs are never snapshotted — they are DOM-lifecycle state, not engine state, and are excluded from `PresentationSnapshot` for the same reason as the other ephemeral state listed in Section 33.10.
+
+## 33.16 JSON and Host Storage Responsibility
+
+Status: LOCKED
+
+Snapshots are ordinary JSON-compatible values. A host may call `JSON.stringify(snapshot)`/`JSON.parse(serialized)` directly — AfterText does not add `serializeSnapshot`/`deserializeSnapshot` functions in v0.4.
+
+AfterText does not own, and v0.4 does not add, `localStorage`, `IndexedDB`, a filesystem, a database, cloud storage, or save slots (Section 33.1). A headless host may compose its own save shape, for example:
+
+```ts
+interface AppSave {
+  storyKey: string;
+  player: PlayerSnapshot;
+  presentation: PresentationSnapshot;
+}
+```
+
+This is a **host-owned example, not an AfterText Core public type.** For `AfterTextPlayer` specifically, the Web Renderer offers `AfterTextPlayerSnapshot` as a ready-made convenience composition (Section 33.11), but a host remains free to store its two halves however it prefers.
+
+Restored JSON must be treated as untrusted runtime input at every layer: accept `unknown`, validate field-by-field (Section 33.8, 33.11), never `eval` or execute dynamic code, never blindly `Object.assign`/spread a parsed object into live state, bounds-check structural positions, and reject on fingerprint mismatch. No security machinery beyond this minimum posture is introduced.
+
+## 33.17 Compatibility Guarantees
+
+Status: LOCKED
+
+`formatVersion: 1` exists to let `restorePlayer`/`restoreSnapshot` detect and reject an unsupported snapshot format; it implies no migration support, no cross-version durability, and no "forever-compatible saves." An unknown `formatVersion` is rejected (`unsupportedFormatVersion`).
+
+**v0.4 makes no compatibility guarantee for `PlayerSnapshot` (or `PresentationSnapshot`/`AfterTextPlayerSnapshot`) across AfterText package versions.** This is intentional, not an oversight: a future release may retain, reject, or migrate an older format, but v0.4 promises none of those outcomes. Snapshot schema fields may evolve in a future `formatVersion` only with corresponding version-gated handling in the restore path; consumers must continue treating opaque fields (`position`, `current`) as opaque regardless of version.
+
+## 33.18 Public API Impact
+
+```text
+@aftertext/compiler
+- no change (no new API, no new syntax, no new AST node)
+
+@aftertext/runtime
+- new, narrow: toCursorPosition(runtimeState, cursor): JsonValue
+  (takes runtimeState because the scene frame's sceneId lives in
+  runtimeState.navigation, not in the cursor itself, Section 33.4),
+  fromCursorPosition(document, runtimeState, position, resultKind):
+  <ok/error result containing an ExecutionCursor AND, for
+  content/dialogue/presentation/choice, the resolved StoryBlock Player
+  needs to rebuild that result's AST-bearing fields (Section 33.4,
+  33.7) — also cross-checks runtimeState.navigation.sceneId against
+  position's own embedded scene id internally (Section 33.4) — exact
+  naming per repository convention> — the one exception to "no new
+  Runtime public API,"
+  forced by Runtime's package exports boundary restricting it to its
+  root barrel only (Section 33.2): Player cannot call an unexported
+  Runtime function across the package boundary, and ExecutionCursor has
+  always been fully opaque to every consumer including Player (Section
+  17.13), so cursor position encode/decode — and resolved-block lookup
+  — must be public
+- no other new public export
+- internal structural-cursor change (adding conditional-branch positional
+  identity, Section 33.4), read and written only by the two functions above
+- ExecutionCursor is already a public export today (the runtime barrel
+  exports the type alias, though not CursorFrame/CursorFrameOrigin by
+  name); the internal cursor-shape change may therefore be visible in
+  packages/runtime/api-baseline.json as a structural diff to that
+  existing exported type, separately from the two new named exports
+- PlayerSnapshot.position (Section 33.6) remains independently opaque
+  regardless of this diff: toCursorPosition/fromCursorPosition's own
+  public signatures never expose CursorFrame's shape, so it never
+  freezes the snapshot format to Runtime's internal cursor representation
+
+@aftertext/player
+- new: JsonValue, PlayerSnapshot, PlayerRestoreError, RestorePlayerResult
+  (or repository-convention-consistent equivalent naming), snapshotPlayer,
+  restorePlayer
+- snapshotPlayer/restorePlayer call Runtime's toCursorPosition/
+  fromCursorPosition internally; Player never constructs or inspects an
+  ExecutionCursor's contents itself
+- all additive; no existing export's shape changes
+
+@aftertext/web-renderer
+- new: PresentationSnapshot, PresentationRestoreError
+- new: AfterTextPlayerSnapshot, AfterTextPlayerRestoreError,
+  AfterTextPlayerRestoreResult, AfterTextPlayerHandle
+- AfterTextPlayer gains ref support (forwardRef); AfterTextPlayerProps
+  itself is not required to change
+- not exported: PresentationState, snapshotPresentation, restorePresentation
+  (Section 33.10)
+- NOT fully additive: AfterTextPlayer's own exported shape changes from
+  an ordinary function to a ForwardRefExoticComponent (Section 33.11) —
+  a real, narrow, accepted exception; every other export in this list
+  is additive with no existing shape change
+```
+
+As with prior additive-union-widening milestones (Section 31.17, 32.28), this is not described as zero API impact. Unlike those, which were purely additive union widenings, `AfterTextPlayer`'s own export genuinely changes shape (Section 33.11) — forced by `forwardRef` being the only mechanism giving ref support across both supported React versions; every other new export listed here remains additive, introducing no breaking change to any other existing exported type or function signature.
+
+## 33.19 Compiler Impact, Reader Memory, and Future Compatibility
+
+Status: LOCKED
+
+**Compiler impact: none.** No new story directive, AST node, or public Compiler export is introduced. Fingerprinting (Section 33.5) occurs entirely downstream of the existing compiled `StoryDocument`.
+
+**Reader Memory asymptotic optimization is explicitly out of scope for v0.4 and is not specified here.** A prior stabilization investigation found a real O(S²) total-playthrough cost in `recordSceneVisit`/`recordVariantSeen` (`ReaderState.visitedScenes`/`seenVariants`'s whole-`Record`-spread updates), but also found that `ReaderState`'s plain-object shape is itself public API, separately baseline-tracked, and additionally constrained by a locked prototype-safety test requiring literal plain-object identity after every `advance()` call and after a JSON round-trip. A genuine asymptotic fix would require a separately reviewed public-contract change, not something Save/Restore should decide as a side effect. `PlayerSnapshot.runtimeState` therefore includes the existing `RuntimeState` (and within it, `ReaderState`) exactly according to its current public semantic shape; Save/Restore does not mutate that representation for optimization purposes. This remains future work.
+
+**Future Character compatibility.** Save/Restore does not constrain a future Character Registry (Section 32.23). Characters remain static document metadata today; if a future slice makes Character data semantic input to execution, it would naturally participate in the document fingerprint (Section 33.5) the same way any other semantic authored value does. Character design itself is not undertaken in this section.
+
+**Future Variables compatibility.** v0.4 snapshots use the current `RuntimeState`/`StoryValue` shape only. No array/object variable feature, and no new serialization machinery, is introduced now — nothing here is designed in a way that would prevent a future JSON-compatible `StateValue` expansion from simply continuing to serialize correctly as part of `RuntimeState`.
+
+**Future Sprite transitions compatibility.** Current timer/animation policy remains: ephemeral timing is always recreated fresh on restore (Section 33.13), and no generalized animation model is introduced now. A future renderer-only declarative timing/transition metadata feature may extend `PresentationSnapshot`'s semantics in a later snapshot format version; it is not designed here.
+
+## 33.20 Testing and Implementation Conformance Requirements
+
+Status: informational
+
+**Fresh-recompile proof.** A restore test using only the original in-memory `StoryDocument` is not sufficient proof of this design. Implementation's critical restore tests must: compile a source, play to a suspension, take a snapshot, **discard** the original `StoryDocument`, compile the same source **again** (producing a distinct `StoryDocument` instance), restore the snapshot against that freshly compiled document, and continue execution. This is the only test shape that actually exercises Section 33.5's cross-document fingerprint/position-resolution contract rather than accidentally relying on a retained AST reference.
+
+**No-double-effect conformance.** Implementation tests must prove that restore-then-continue does not duplicate `@set` effects, scene-visit counts, variant-seen counts, or Presentation state application (Section 33.9), including at least one nested Conditional/Variant scenario.
+
+**Choice item-set conformance.** At least one test must snapshot a Choice suspension whose first-visible item is conditioned on `visited(...)` or `seen_variant(...)` of the very scene/Variant occurrence currently being entered — the specific case where the originally-offered item set and a naive re-filter against the snapshotted `RuntimeState` would disagree (Section 33.7, 33.9) — and confirm the restored item set exactly matches the originally-offered one, by value, not merely by count.
+
+**Error-suspension exposure conformance.** At least one test must snapshot a progressive error (Section 17.11) that occurs inside a scene or Variant branch *before* that episode's/occurrence's first qualifying result — i.e. while its `visitRecorded`/`seenRecorded` is still genuinely `false` (Section 33.4) — restore it, then supply whatever makes the retried `advance()` succeed, and confirm the scene-visit/Variant-seen recording happens exactly once when the later qualifying result is reached (not zero times, matching the original in-memory session's own retry behavior).
+
+**Non-finite music volume conformance.** At least one test must construct a `PresentationState` with a non-finite `music.volume` (e.g. by driving a `StoryDocument` that bypasses ordinary `compile()` validation, or by directly constructing the renderer-internal state in the test) and confirm `snapshotPresentation` normalizes it to an absent `volume` (Section 33.10) rather than storing it raw or throwing — and that the resulting snapshot round-trips through `JSON.stringify`/`JSON.parse` and `restoreSnapshot` without being rejected.
+
+**Untrusted-input finiteness conformance.** At least one test must call `restorePlayer` with a hand-crafted `unknown` value (not a `snapshotPlayer()` output) whose `runtimeState.story` contains a `NaN` or `Infinity` value and confirm it is rejected as `malformedSnapshot` (Section 33.6, 33.8) — proving the finite-number check is independent restore-time validation, not an assumption carried over from live-state guarantees.
+
+**Choice-tampering conformance.** At least one test must call `restorePlayer`/`restoreSnapshot` with a crafted `choice` snapshot whose persisted items are empty, or whose `text`/`target` do not correspond to any item of the resolved `ChoiceNode`, or whose items are reordered relative to it, and confirm each is rejected as `unresolvablePosition` rather than accepted (Section 33.8).
+
+**Fingerprint conformance.** At minimum: an identical semantic document restores successfully; a whitespace/span-only change preserving compiled semantics still restores successfully; a Dialogue text change, a Choice target change, a `@set` expression/value change, a Presentation asset-reference change, and a scene/block semantic or ordering change each produce `documentMismatch` (Section 33.5, 33.8).
+
+**Suspension-point coverage.** Save/Restore semantics must be exercised, with their respective locked behaviors (Section 33.7), across every suspension kind — the not-started state (`current === null`), `content`, `dialogue`, `choice`, `presentation`, `navigation`, `completed`, `error` — not only the more commonly-saved content/choice cases. The `error` case must specifically confirm a restored authored runtime error never carries a `span` (Section 33.7), even when the originally-snapshotted error did.
+
+## 33.21 Explicit Non-Goals for This Slice
+
+Not part of v0.4 Save/Restore: save slots, built-in Save/Load UI, any built-in storage backend (`localStorage`, `IndexedDB`, filesystem, database, cloud storage), autosave, cross-package-version snapshot migration, migration across a semantically edited document, exact timer/elapsed-time restoration, audio playback position restoration, Character registry, Sprite transitions/animation, Reader Memory asymptotic optimization, and any form of history/backlog, undo, reverse execution, or timeline replay (Section 20.26).
+
+## 33.22 Future Compatibility
+
+The locked v0.4 Save/Restore model (Section 33.2–33.18) does not preclude future additive features such as a Character registry whose semantic data participates in the document fingerprint (Section 33.19), a later Reader Memory representation change accompanied by its own separately-reviewed public-contract decision, a future `formatVersion` extending `PresentationSnapshot` for declarative Sprite-transition metadata, or an eventual host-facing storage convenience built on top of `AfterTextPlayerSnapshot`. Their syntax and semantics are not designed here.
