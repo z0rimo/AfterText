@@ -181,7 +181,7 @@ function popExhaustedFrames(frames: ExecutionCursor, reader: ReaderState, sceneI
     // "treat anything that isn't affirmatively exhausted as active, and
     // let block dispatch's own `default` case catch the malformed index"
     // behavior (Section 17.11) exactly.
-    if (!(top.index >= top.blocks.length)) {
+    if (!(top.index >= top.blocks.length)) { // NOSONAR(typescript:S1940) — `<` is not equivalent here; see comment above
       return { kind: "active", frames: current };
     }
 
