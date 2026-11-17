@@ -88,15 +88,36 @@ function isPlainRecord(value: JsonValue): value is { readonly [key: string]: Jso
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
-/** Runtime-level parse of the untrusted opaque payload's top-level and per-frame shape — no throw on malformed input. */
+/**
+ * No legitimate structural cursor ever nests anywhere near this deep
+ * (it mirrors the authored document's own Scene/Conditional/Variant
+ * nesting). Caps `rawFrames.length` so a caller-supplied array claiming
+ * an astronomical length (cheap to construct when sparse, e.g.
+ * `new Array(0xffffffff)`) cannot force an equally astronomical number
+ * of index reads below.
+ */
+const MAX_FRAMES_LENGTH = 10_000;
+
+/**
+ * Runtime-level parse of the untrusted opaque payload's top-level and
+ * per-frame shape — no throw on malformed input. Reads `rawFrames` by
+ * index up to its own captured `.length` rather than with `for...of`:
+ * a `for...of` loop consults `Symbol.iterator`, so a caller-supplied
+ * array Proxy with a short, validly-checked `.length` but a custom
+ * iterator that yields indefinitely would otherwise loop forever
+ * (`position` is untrusted `JsonValue`, not merely whatever
+ * `JSON.parse` could have produced) — indexed access never invokes it.
+ */
 function parsePositionPayload(position: JsonValue): CursorPositionPayload | undefined {
   if (!isPlainRecord(position)) return undefined;
   const { sceneId, frames: rawFrames } = position;
   if (typeof sceneId !== "string" || !Array.isArray(rawFrames)) return undefined;
+  const length = rawFrames.length;
+  if (length > MAX_FRAMES_LENGTH) return undefined;
 
   const frames: FramePosition[] = [];
-  for (const raw of rawFrames) {
-    const frame = parseFramePosition(raw);
+  for (let i = 0; i < length; i++) {
+    const frame = parseFramePosition(rawFrames[i]!);
     if (!frame) return undefined;
     frames.push(frame);
   }

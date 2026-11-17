@@ -71,10 +71,19 @@ export function encodeCurrent(current: ExecutionResult | null): JsonValue {
   return unhandledResultType(current);
 }
 
+/**
+ * Reads `value` by index up to its own captured `.length` rather than
+ * with `for...of`: a `for...of` loop consults `Symbol.iterator`, so a
+ * caller-supplied array Proxy with a short, `isJsonValue`-validated
+ * `.length` but a custom iterator that yields indefinitely would
+ * otherwise loop forever here — indexed access never invokes it.
+ */
 function decodeChoiceItems(value: unknown): readonly { readonly text: string; readonly target: string }[] | undefined {
   if (!Array.isArray(value)) return undefined;
+  const length = value.length;
   const items: { text: string; target: string }[] = [];
-  for (const raw of value) {
+  for (let i = 0; i < length; i++) {
+    const raw = value[i];
     if (!isPlainRecord(raw)) return undefined;
     const { text, target } = raw;
     if (typeof text !== "string" || typeof target !== "string") return undefined;

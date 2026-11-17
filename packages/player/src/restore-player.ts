@@ -203,12 +203,20 @@ function reconstructError(
  * match is NOT sufficient — it mismatches when a duplicate conditioned
  * item precedes a duplicate unconditional item with the same text/target
  * and only one persisted occurrence exists. Never evaluates any
- * `condition` expression.
+ * `condition` expression. Rejects before allocating the DP table at all
+ * when `persisted.length > authored.length`: an authored list can
+ * expose at most one persisted occurrence per item, so a longer
+ * persisted list can never be a valid subsequence regardless of
+ * content — otherwise a dense but still-within-`MAX_JSON_ARRAY_LENGTH`
+ * persisted payload paired with a small authored Choice would still pay
+ * the full O(authored × persisted) table cost for a result already
+ * known to be `false`.
  */
 function choiceItemsAreValidSubsequence(
   authored: readonly ChoiceItem[],
   persisted: readonly { readonly text: string; readonly target: string }[]
 ): boolean {
+  if (persisted.length > authored.length) return false;
   const m = persisted.length;
   let reachable = new Array<boolean>(m + 1).fill(false);
   reachable[0] = true;

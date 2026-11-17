@@ -554,3 +554,49 @@ describe("bounded work for huge sparse arrays (Codex-reported P2, docs/CORE_SPEC
     expect(elapsedMs).toBeLessThan(2000);
   });
 });
+
+describe("choice-items decode/validation safety (Codex-reported P2, docs/CORE_SPEC.md Section 33.8)", () => {
+  const source = ["@scene s", "@choice", "- Go -> a", "@end", "@scene a", "A."].join("\n");
+  const document = compileDoc(source);
+
+  function choiceSnapshot() {
+    const player = createPlayer(document);
+    return snapshotPlayer(document, advancePlayer(document, player));
+  }
+
+  it("reads a choice items array Proxy by index, ignoring a Symbol.iterator that would yield indefinitely, without hanging", () => {
+    const snapshot = choiceSnapshot();
+    const realItems = [{ text: "Go", target: "a" }];
+    const hijacked = new Proxy(realItems, {
+      get(target, prop, receiver) {
+        if (prop === Symbol.iterator) {
+          return function* () {
+            while (true) yield { text: "Go", target: "a" };
+          };
+        }
+        return Reflect.get(target, prop, receiver);
+      }
+    });
+    const tampered = { ...snapshot, current: { type: "choice", items: hijacked } };
+    const start = performance.now();
+    expect(() => restorePlayer(document, tampered)).not.toThrow();
+    const result = restorePlayer(document, tampered);
+    const elapsedMs = performance.now() - start;
+    // Indexed access reads realItems[0] by its real, short .length — the
+    // malicious generator is never consumed, so this restores normally.
+    expect(result.ok).toBe(true);
+    expect(elapsedMs).toBeLessThan(2000);
+  });
+
+  it("rejects a persisted choice list longer than the authored Choice quickly, before allocating the DP table", () => {
+    const snapshot = choiceSnapshot();
+    const items = Array.from({ length: 5000 }, (_, i) => ({ text: `item${i}`, target: "a" }));
+    const tampered = { ...snapshot, current: { type: "choice", items } };
+    const start = performance.now();
+    expect(() => restorePlayer(document, tampered)).not.toThrow();
+    const result = restorePlayer(document, tampered);
+    const elapsedMs = performance.now() - start;
+    expect(result).toEqual({ ok: false, error: { kind: "unresolvablePosition", reason: expect.any(String) } });
+    expect(elapsedMs).toBeLessThan(2000);
+  });
+});
