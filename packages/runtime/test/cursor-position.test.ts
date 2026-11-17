@@ -684,3 +684,20 @@ describe("bounded/non-iterator-hijackable frame reads (Codex-reported P2, docs/C
     expect(elapsedMs).toBeLessThan(2000);
   });
 });
+
+describe("negative/non-integer reported frames lengths are rejected, not treated as empty (Codex-reported P2, docs/CORE_SPEC.md Section 33.8)", () => {
+  const documentA = compileDoc("@scene s\nHi.\n");
+  const state = createRuntimeState(documentA);
+
+  it("rejects a frames array Proxy reporting a negative length instead of treating it as empty", () => {
+    const hostile = new Proxy([{ kind: "scene", index: 0, visitRecorded: false }], {
+      get(target, prop, receiver) {
+        if (prop === "length") return -1;
+        return Reflect.get(target, prop, receiver);
+      }
+    });
+    const position = { sceneId: "s", frames: hostile } as unknown as JsonValue;
+    expect(() => fromCursorPosition(documentA, state, position, "error")).not.toThrow();
+    expect(fromCursorPosition(documentA, state, position, "error")).toEqual({ ok: false, reason: expect.any(String) });
+  });
+});

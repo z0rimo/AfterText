@@ -203,14 +203,30 @@ function reconstructError(
  * match is NOT sufficient — it mismatches when a duplicate conditioned
  * item precedes a duplicate unconditional item with the same text/target
  * and only one persisted occurrence exists. Never evaluates any
- * `condition` expression. Rejects before allocating the DP table at all
+ * `condition` expression. Rejects before building any reachable set
  * when `persisted.length > authored.length`: an authored list can
  * expose at most one persisted occurrence per item, so a longer
  * persisted list can never be a valid subsequence regardless of
  * content — otherwise a dense but still-within-`MAX_JSON_ARRAY_LENGTH`
  * persisted payload paired with a small authored Choice would still pay
- * the full O(authored × persisted) table cost for a result already
- * known to be `false`.
+ * the full cost below for a result already known to be `false`.
+ *
+ * `reachable` is the *sparse* set of currently-true positions, not a
+ * dense `m + 1`-element array indexed by every position regardless of
+ * whether it is reachable: `authored.length` is trusted (it comes from
+ * the compiled document, not the untrusted snapshot) and the compiler
+ * imposes no item-count limit, so a document can legitimately author
+ * tens of thousands of Choice items — a dense table would cost
+ * `authored.length × persisted.length` even for a perfectly valid
+ * round trip of such a Choice (quadratic in a size the untrusted input
+ * does not control, but still slow enough to block the event loop for
+ * a real, non-malicious save). Iterating only the sparse set gives the
+ * exact same result — every transition below is identical to the
+ * dense table's — in time proportional to how many positions are
+ * actually reachable at each step, which for the overwhelmingly common
+ * case (most or all items unconditional, at most one position ever
+ * reachable at a time) is linear in `authored.length` regardless of
+ * `persisted.length`.
  */
 function choiceItemsAreValidSubsequence(
   authored: readonly ChoiceItem[],
@@ -218,20 +234,18 @@ function choiceItemsAreValidSubsequence(
 ): boolean {
   if (persisted.length > authored.length) return false;
   const m = persisted.length;
-  let reachable = new Array<boolean>(m + 1).fill(false);
-  reachable[0] = true;
+  let reachable = new Set<number>([0]);
 
   for (const item of authored) {
-    const next = new Array<boolean>(m + 1).fill(false);
-    for (let j = 0; j <= m; j++) {
-      if (!reachable[j]) continue;
-      if (item.condition) next[j] = true;
-      if (j < m && item.text === persisted[j]!.text && item.target === persisted[j]!.target) next[j + 1] = true;
+    const next = new Set<number>();
+    for (const j of reachable) {
+      if (item.condition) next.add(j);
+      if (j < m && item.text === persisted[j]!.text && item.target === persisted[j]!.target) next.add(j + 1);
     }
     reachable = next;
   }
 
-  return reachable[m] === true;
+  return reachable.has(m);
 }
 
 function reconstructChoice(

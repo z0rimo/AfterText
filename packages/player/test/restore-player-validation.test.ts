@@ -657,3 +657,36 @@ describe("single-read, independently re-bound array lengths (Codex-reported P2, 
     expect(result).toEqual({ ok: false, error: { kind: "malformedSnapshot", reason: expect.any(String) } });
   });
 });
+
+describe("negative/non-integer reported array lengths are rejected, not treated as empty (Codex-reported P2, docs/CORE_SPEC.md Section 33.8)", () => {
+  const { document, snapshot } = freshSnapshot();
+
+  it("rejects an array Proxy reporting a negative length instead of treating it as empty", () => {
+    const hostile = new Proxy([{ sceneId: "s", frames: [] }], {
+      get(target, prop, receiver) {
+        if (prop === "length") return -1;
+        return Reflect.get(target, prop, receiver);
+      }
+    });
+    const tampered = { ...snapshot, position: hostile };
+    expect(() => restorePlayer(document, tampered)).not.toThrow();
+    expect(restorePlayer(document, tampered)).toEqual({ ok: false, error: { kind: "malformedSnapshot", reason: expect.any(String) } });
+  });
+});
+
+describe("large authored choices round-trip quickly, not quadratically (Codex-reported P2, docs/CORE_SPEC.md Section 33.8)", () => {
+  it("snapshots and restores a 100,000-item unconditional Choice in well under a second", () => {
+    const itemCount = 100_000;
+    const choiceLines = Array.from({ length: itemCount }, (_, i) => `- Option ${i} -> a`);
+    const source = ["@scene s", "@choice", ...choiceLines, "@end", "@scene a", "A."].join("\n");
+    const document = compileDoc(source);
+    const player = createPlayer(document);
+    const advanced = advancePlayer(document, player);
+    const snapshot = snapshotPlayer(document, advanced);
+    const start = performance.now();
+    const restored = restorePlayer(document, snapshot);
+    const elapsedMs = performance.now() - start;
+    expect(restored.ok).toBe(true);
+    expect(elapsedMs).toBeLessThan(2000);
+  });
+});

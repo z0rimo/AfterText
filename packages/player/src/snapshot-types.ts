@@ -105,19 +105,26 @@ const MAX_JSON_VALUE_DEPTH = 64;
 const MAX_JSON_ARRAY_LENGTH = 1_000_000;
 
 /**
- * Captures `value.length` exactly once and returns it only if within
+ * Captures `value.length` exactly once and returns it only if it is a
+ * genuine array length — a nonnegative integer — within
  * `MAX_JSON_ARRAY_LENGTH`, or `undefined` otherwise — the one place
- * this package reads an untrusted array's `.length`. Checking the
- * length and then separately calling a built-in like `.every()` is not
- * equivalent: `.every()` performs its own internal `Get(array,
- * "length")`, a second read a live Proxy can answer differently from
- * the first (small enough to pass this check, then enormous), so every
- * caller here iterates by index up to the value this function returns
- * instead of ever calling `.every()`/`for...of` on the array itself.
+ * this package reads an untrusted array's `.length`. Checking only the
+ * upper bound is not enough: a Proxy's `length` trap can return a
+ * negative number (or `NaN`, or a non-integer), which would pass an
+ * upper-bound-only check and then make every caller's `for (let i = 0;
+ * i < length; i++)` loop below run zero iterations — silently treating
+ * a malformed array as validly *empty* rather than rejecting it.
+ * Checking the length and then separately calling a built-in like
+ * `.every()` is also not equivalent: `.every()` performs its own
+ * internal `Get(array, "length")`, a second read a live Proxy can
+ * answer differently from the first (small enough to pass this check,
+ * then enormous), so every caller here iterates by index up to the
+ * value this function returns instead of ever calling `.every()`/
+ * `for...of` on the array itself.
  */
 export function boundedArrayLength(value: readonly unknown[]): number | undefined {
   const length = value.length;
-  return length <= MAX_JSON_ARRAY_LENGTH ? length : undefined;
+  return Number.isInteger(length) && length >= 0 && length <= MAX_JSON_ARRAY_LENGTH ? length : undefined;
 }
 
 function isJsonValueAtDepth(value: unknown, depth: number, memo: Map<object, boolean>): value is JsonValue {

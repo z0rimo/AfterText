@@ -110,13 +110,18 @@ const MAX_FRAMES_LENGTH = 1_000_000;
  * iterator that yields indefinitely would otherwise loop forever
  * (`position` is untrusted `JsonValue`, not merely whatever
  * `JSON.parse` could have produced) — indexed access never invokes it.
+ * The captured length must also be checked as a genuine nonnegative
+ * integer, not merely within the upper bound: a Proxy's `length` trap
+ * returning a negative number would otherwise pass the upper-bound
+ * check and then make the indexed loop below run zero iterations,
+ * silently treating a malformed `frames` array as validly empty.
  */
 function parsePositionPayload(position: JsonValue): CursorPositionPayload | undefined {
   if (!isPlainRecord(position)) return undefined;
   const { sceneId, frames: rawFrames } = position;
   if (typeof sceneId !== "string" || !Array.isArray(rawFrames)) return undefined;
   const length = rawFrames.length;
-  if (length > MAX_FRAMES_LENGTH) return undefined;
+  if (!Number.isInteger(length) || length < 0 || length > MAX_FRAMES_LENGTH) return undefined;
 
   const frames: FramePosition[] = [];
   for (let i = 0; i < length; i++) {
