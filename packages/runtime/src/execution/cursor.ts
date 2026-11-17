@@ -145,14 +145,14 @@ export function resolveBlocks(sceneBlocks: readonly StoryBlock[] | undefined, cu
 /** Immutably flips the scene frame at depth 0 to `visitRecorded: true`. No-op if it isn't a scene frame. */
 function withVisitRecorded(cursor: ExecutionCursor): ExecutionCursor {
   const frame = cursor[0];
-  if (!frame || frame.kind !== "scene") return cursor;
+  if (frame?.kind !== "scene") return cursor;
   return [{ ...frame, visitRecorded: true }, ...cursor.slice(1)];
 }
 
 /** Immutably flips the variant frame at `depth` to `seenRecorded: true`. No-op if it isn't a variant frame. */
 function withSeenRecorded(cursor: ExecutionCursor, depth: number): ExecutionCursor {
   const frame = cursor[depth];
-  if (!frame || frame.kind !== "variant") return cursor;
+  if (frame?.kind !== "variant") return cursor;
   const next = cursor.slice();
   next[depth] = { ...frame, seenRecorded: true };
   return next;

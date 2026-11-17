@@ -259,7 +259,7 @@ function resolveCursor(
     if (resolved.childBlocks) blocks = resolved.childBlocks;
   }
 
-  const deepestFramePos = payload.frames[payload.frames.length - 1]!;
+  const deepestFramePos = payload.frames.at(-1)!;
   const resolution = resolveSuspensionBlock(resultKind, deepestFramePos, blocks);
   return resolution.ok ? { cursor: frames, resolvedBlock: resolution.block } : undefined;
 }
@@ -281,7 +281,7 @@ function exposureFlagsAreConsistent(cursor: ExecutionCursor, runtimeState: Runti
     }
     if (frame.kind === "variant" && frame.seenRecorded) {
       const memory = ownEntry(runtimeState.reader.seenVariants, frame.variantId);
-      if (!memory || memory.lastSeenBranchId !== frame.branchId) return false;
+      if (memory?.lastSeenBranchId !== frame.branchId) return false;
     }
   }
   return true;
