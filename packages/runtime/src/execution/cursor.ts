@@ -1,57 +1,66 @@
-import type { StoryBlock } from "@aftertext/compiler";
+import type { StoryBlock, StoryDocument } from "@aftertext/compiler";
 
 /**
- * Reader-Memory-integration provenance for one frame (docs/CORE_SPEC.md
- * Section 17.9). Purely runtime-internal bookkeeping — never a `ReaderState`
- * value itself, only whether/what to record:
+ * One level of structural execution position (docs/CORE_SPEC.md Section
+ * 33.4). Exactly three constructs ever push a frame — scene entry,
+ * Conditional branch descent, Variant branch descent — and each frame
+ * carries only the identity needed to re-descend into the exact same
+ * branch, plus its own block index. Deliberately AST-free: no frame may
+ * hold a `StoryBlock[]` or any other AST object reference, so a cursor can
+ * be derived into an opaque, JSON-serializable position (`cursor-
+ * position.ts`) and later re-resolved against a freshly compiled,
+ * structurally-equivalent `StoryDocument`.
  *
- * - `scene`: tags the outermost frame of one scene-entry episode. Set once,
- *   when the episode begins; `visitRecorded` flips to `true` the first time
- *   that episode produces a qualifying result.
- * - `variant`: tags a frame pushed by resolving a Variant to a branch. One
- *   tag per resolution occurrence; `seenRecorded` flips to `true` the first
- *   time that occurrence produces a qualifying result from inside it.
- *
- * A frame pushed for any other reason (a matched `ConditionalNode` branch)
- * carries no `origin` — Conditional has no reader-memory concept.
+ * `visitRecorded`/`seenRecorded` are the same Reader-Memory-integration
+ * provenance the pre-v0.4 `CursorFrameOrigin` carried (docs/CORE_SPEC.md
+ * Section 17.9) — now folded directly into the frame itself since each
+ * frame kind unambiguously determines whether it has a reader-memory
+ * concept at all (Conditional never does).
  */
-export type CursorFrameOrigin =
-  | { readonly kind: "scene"; readonly visitRecorded: boolean }
-  | { readonly kind: "variant"; readonly variantId: string; readonly branchId: string; readonly seenRecorded: boolean };
-
-/**
- * One level of nested block-tree position: which block list is being
- * walked, and the index of the next block to process within it. Not
- * exported from the package's public barrel — internal to `execution/`.
- */
-export interface CursorFrame {
-  readonly blocks: readonly StoryBlock[];
-  readonly index: number;
-  readonly origin?: CursorFrameOrigin;
-}
+export type CursorFrame =
+  | { readonly kind: "scene"; readonly sceneId: string; readonly index: number; readonly visitRecorded: boolean }
+  | { readonly kind: "conditional"; readonly branchIndex: number; readonly index: number }
+  | {
+      readonly kind: "variant";
+      readonly variantId: string;
+      readonly branchId: string;
+      readonly index: number;
+      readonly seenRecorded: boolean;
+    };
 
 /**
  * Ephemeral structural execution position within a scene's block tree
- * (docs/CORE_SPEC.md Section 17.10). A stack of frames — the top is the
- * deepest active nested branch. Exists separately from `RuntimeState`, is
- * never persisted, and must never be written into `ReaderState`: it is
- * *structural* position (plus, per 17.9, ephemeral recording provenance),
- * not reader-memory identity itself. Treated as opaque by consumers —
- * obtained from and passed back into `advance`/`selectChoice`, never
- * constructed or inspected directly.
+ * (docs/CORE_SPEC.md Section 17.10, 33.4). A stack of frames — the top is
+ * the deepest active nested branch. Exists separately from `RuntimeState`,
+ * is never persisted directly, and must never be written into
+ * `ReaderState`: it is *structural* position (plus, per 17.9, ephemeral
+ * recording provenance), not reader-memory identity itself. Treated as
+ * opaque by consumers — obtained from and passed back into
+ * `advance`/`selectChoice`, never constructed or inspected directly.
+ * Persisting across a suspension goes through `toCursorPosition`/
+ * `fromCursorPosition` (`cursor-position.ts`), never the cursor itself.
  */
 export type ExecutionCursor = readonly CursorFrame[];
 
 /** The cursor meaning "start of the current scene, from its first block." */
 export const INITIAL_CURSOR: ExecutionCursor = [];
 
-/** Pushes a new frame — "descending into a selected branch's blocks." */
-export function pushFrame(
-  cursor: ExecutionCursor,
-  blocks: readonly StoryBlock[],
-  origin?: CursorFrameOrigin
-): ExecutionCursor {
-  return [...cursor, { blocks, index: 0, origin }];
+/** The identity needed to push a new frame — everything except its initial `index`/flags. */
+export type NewCursorFrame =
+  | { readonly kind: "scene"; readonly sceneId: string }
+  | { readonly kind: "conditional"; readonly branchIndex: number }
+  | { readonly kind: "variant"; readonly variantId: string; readonly branchId: string };
+
+/** Pushes a new frame — "descending into a selected scene/branch." Always starts at index 0. */
+export function pushFrame(cursor: ExecutionCursor, frame: NewCursorFrame): ExecutionCursor {
+  switch (frame.kind) {
+    case "scene":
+      return [...cursor, { kind: "scene", sceneId: frame.sceneId, index: 0, visitRecorded: false }];
+    case "conditional":
+      return [...cursor, { kind: "conditional", branchIndex: frame.branchIndex, index: 0 }];
+    case "variant":
+      return [...cursor, { kind: "variant", variantId: frame.variantId, branchId: frame.branchId, index: 0, seenRecorded: false }];
+  }
 }
 
 /** Pops the deepest frame — resuming the parent after its nested content is exhausted. */
@@ -59,19 +68,93 @@ export function popFrame(cursor: ExecutionCursor): ExecutionCursor {
   return cursor.slice(0, -1);
 }
 
-/** Returns a cursor with the top frame's index advanced by one, preserving its origin. */
+/** Returns a cursor with the top frame's index advanced by one, preserving every other field. */
 export function withNextIndex(cursor: ExecutionCursor): ExecutionCursor {
   const top = cursor[cursor.length - 1];
   if (!top) return cursor;
-  return [...cursor.slice(0, -1), { blocks: top.blocks, index: top.index + 1, origin: top.origin }];
+  return [...cursor.slice(0, -1), { ...top, index: top.index + 1 }];
 }
 
-/** Immutably replaces the origin metadata of the frame at `depth`. */
-function withFrameOrigin(cursor: ExecutionCursor, depth: number, origin: CursorFrameOrigin): ExecutionCursor {
+/**
+ * Resolves a scene frame's own block list by its stable `sceneId` — the
+ * cursor's structural root. Exported so `advance()` can resolve it exactly
+ * once per call and thread the result through `resolveBlocks` below,
+ * rather than every per-block loop iteration re-scanning
+ * `document.scenes` from scratch for the same, unchanging scene.
+ */
+export function resolveSceneBlocks(document: StoryDocument, sceneId: string): readonly StoryBlock[] | undefined {
+  return document.scenes.find((scene) => scene.id === sceneId)?.blocks;
+}
+
+/**
+ * Resolves one Conditional/Variant child frame's own block list from its
+ * parent's currently-pointed-at block (docs/CORE_SPEC.md Section 33.10): a
+ * Conditional child requires that block to be a `ConditionalNode` with an
+ * in-range `branchIndex`; a Variant child requires it to be the exact
+ * `VariantNode` named by `variantId`, with a `branchId` that resolves
+ * within it. Never searches the document for an arbitrary Conditional/
+ * Variant elsewhere. A scene frame is never a child — only ever the root.
+ */
+function resolveChildBlocks(parentBlock: StoryBlock | undefined, frame: CursorFrame): readonly StoryBlock[] | undefined {
+  if (frame.kind === "conditional") {
+    return parentBlock?.type === "Conditional" ? parentBlock.branches[frame.branchIndex]?.blocks : undefined;
+  }
+  if (frame.kind === "variant") {
+    return parentBlock?.type === "Variant" && parentBlock.id === frame.variantId
+      ? parentBlock.branches.find((branch) => branch.branchId === frame.branchId)?.blocks
+      : undefined;
+  }
+  return undefined;
+}
+
+/**
+ * Resolves the block list the cursor's deepest (top) frame is currently
+ * indexing into, given the cursor's own scene root already resolved once
+ * by the caller (`sceneBlocks` — see `resolveSceneBlocks`). Walks the
+ * stack structurally down from that root (docs/CORE_SPEC.md Section 33.4,
+ * 33.10): a child frame is only ever resolved through its parent frame's
+ * own currently-pointed-at block, never by searching the document for an
+ * arbitrary Conditional/Variant.
+ *
+ * Returns `undefined` if resolution fails at any level — `sceneBlocks`
+ * itself unresolved, a parent block that no longer matches the child
+ * frame's expected kind, or a Variant branch id that no longer resolves.
+ * This can only happen for a cursor that is malformed or stale against the
+ * given document; a cursor obtained from `advance`/`pushFrame` against
+ * this same document always resolves. Callers must not treat `undefined`
+ * as "exhausted" — only as "cannot determine," and let block dispatch's
+ * own default case report the resulting invalid-execution-block error
+ * (docs/CORE_SPEC.md Section 17.11), exactly as a malformed index already
+ * does.
+ */
+export function resolveBlocks(sceneBlocks: readonly StoryBlock[] | undefined, cursor: ExecutionCursor): readonly StoryBlock[] | undefined {
+  let blocks: readonly StoryBlock[] | undefined = sceneBlocks;
+  let parent: CursorFrame | undefined;
+
+  for (const frame of cursor) {
+    if (frame.kind !== "scene") {
+      const parentBlock = parent && blocks ? blocks[parent.index] : undefined;
+      blocks = resolveChildBlocks(parentBlock, frame);
+    }
+    parent = frame;
+  }
+
+  return blocks;
+}
+
+/** Immutably flips the scene frame at depth 0 to `visitRecorded: true`. No-op if it isn't a scene frame. */
+function withVisitRecorded(cursor: ExecutionCursor): ExecutionCursor {
+  const frame = cursor[0];
+  if (!frame || frame.kind !== "scene") return cursor;
+  return [{ ...frame, visitRecorded: true }, ...cursor.slice(1)];
+}
+
+/** Immutably flips the variant frame at `depth` to `seenRecorded: true`. No-op if it isn't a variant frame. */
+function withSeenRecorded(cursor: ExecutionCursor, depth: number): ExecutionCursor {
   const frame = cursor[depth];
-  if (!frame) return cursor;
+  if (!frame || frame.kind !== "variant") return cursor;
   const next = cursor.slice();
-  next[depth] = { blocks: frame.blocks, index: frame.index, origin };
+  next[depth] = { ...frame, seenRecorded: true };
   return next;
 }
 
@@ -79,9 +162,9 @@ function withFrameOrigin(cursor: ExecutionCursor, depth: number, origin: CursorF
  * Reader-Memory exposure recording due at the current cursor position: the
  * active scene-entry episode (frame 0), if not yet recorded, plus every
  * active Variant-branch frame not yet recorded, at any depth — including
- * beneath an untagged (Conditional) frame, so a nested construct inside a
- * selected Variant branch still attributes correctly (docs/CORE_SPEC.md
- * Section 17.9, "Nested Variants"). A pure query — records nothing itself.
+ * beneath a Conditional frame, so a nested construct inside a selected
+ * Variant branch still attributes correctly (docs/CORE_SPEC.md Section
+ * 17.9, "Nested Variants"). A pure query — records nothing itself.
  */
 export interface PendingExposure {
   readonly recordScene: boolean;
@@ -89,14 +172,14 @@ export interface PendingExposure {
 }
 
 export function collectPendingExposure(cursor: ExecutionCursor): PendingExposure {
-  const sceneOrigin = cursor[0]?.origin;
-  const recordScene = sceneOrigin?.kind === "scene" && !sceneOrigin.visitRecorded;
+  const sceneFrame = cursor[0];
+  const recordScene = sceneFrame?.kind === "scene" && !sceneFrame.visitRecorded;
 
   const variants: { depth: number; variantId: string; branchId: string }[] = [];
   for (let depth = 0; depth < cursor.length; depth++) {
-    const origin = cursor[depth]?.origin;
-    if (origin?.kind === "variant" && !origin.seenRecorded) {
-      variants.push({ depth, variantId: origin.variantId, branchId: origin.branchId });
+    const frame = cursor[depth];
+    if (frame?.kind === "variant" && !frame.seenRecorded) {
+      variants.push({ depth, variantId: frame.variantId, branchId: frame.branchId });
     }
   }
   return { recordScene, variants };
@@ -110,15 +193,10 @@ export function collectPendingExposure(cursor: ExecutionCursor): PendingExposure
 export function markExposureRecorded(cursor: ExecutionCursor, pending: PendingExposure): ExecutionCursor {
   let next = cursor;
   if (pending.recordScene) {
-    next = withFrameOrigin(next, 0, { kind: "scene", visitRecorded: true });
+    next = withVisitRecorded(next);
   }
   for (const variant of pending.variants) {
-    next = withFrameOrigin(next, variant.depth, {
-      kind: "variant",
-      variantId: variant.variantId,
-      branchId: variant.branchId,
-      seenRecorded: true
-    });
+    next = withSeenRecorded(next, variant.depth);
   }
   return next;
 }

@@ -10,6 +10,8 @@ import {
   markExposureRecorded,
   popFrame,
   pushFrame,
+  resolveBlocks,
+  resolveSceneBlocks,
   withNextIndex,
   type ExecutionCursor
 } from "./cursor.js";
@@ -35,20 +37,29 @@ export interface AdvanceOptions {
 const DEFAULT_STEP_BUDGET = 10_000;
 
 type ConditionalSelection =
-  | { readonly ok: true; readonly branch: ConditionalBranch }
+  | { readonly ok: true; readonly branch: ConditionalBranch; readonly branchIndex: number }
   | { readonly ok: false; readonly error: RuntimeExecutionError };
 
-/** Not exported — Conditional has no named public resolution operation, unlike Variant's `resolveVariant`. */
+/**
+ * Not exported — Conditional has no named public resolution operation,
+ * unlike Variant's `resolveVariant`. Returns the selected branch's own
+ * positional `branchIndex` alongside it (docs/CORE_SPEC.md Section 33.4):
+ * Conditional branch identity is deliberately positional, not a stable
+ * authored id, so the structural cursor frame `handleConditional` pushes
+ * can re-descend into the exact same branch later without searching the
+ * document for it by object identity.
+ */
 function selectConditionalBranch(node: ConditionalNode, context: EvaluationContext): ConditionalSelection | undefined {
-  for (const branch of node.branches) {
+  for (let branchIndex = 0; branchIndex < node.branches.length; branchIndex++) {
+    const branch = node.branches[branchIndex]!;
     if (branch.kind === "else") {
-      return { ok: true, branch };
+      return { ok: true, branch, branchIndex };
     }
     if (!branch.condition) continue; // defensive: if/elseif always carry a condition per the compiler grammar
 
     const condition = evaluateCondition(branch.condition, context);
     if (!condition.ok) return { ok: false, error: condition.error };
-    if (condition.value) return { ok: true, branch };
+    if (condition.value) return { ok: true, branch, branchIndex };
   }
   return undefined; // no branch matched — not an error
 }
@@ -105,8 +116,12 @@ function handleConditional(
   if (descentCharge === undefined) return { kind: "error", error: RuntimeErrors.stepLimitExceeded() };
   budget = descentCharge;
 
-  // no origin — Conditional has no reader-memory concept
-  return { kind: "continue", frames: pushFrame(frames, selection.branch.blocks), budget };
+  // No reader-memory flag — Conditional has no reader-memory concept.
+  return {
+    kind: "continue",
+    frames: pushFrame(frames, { kind: "conditional", branchIndex: selection.branchIndex }),
+    budget
+  };
 }
 
 /**
@@ -143,11 +158,10 @@ function handleVariant(
 
   return {
     kind: "continue",
-    frames: pushFrame(frames, resolution.resolved.blocks, {
+    frames: pushFrame(frames, {
       kind: "variant",
       variantId: resolution.resolved.variantId,
-      branchId: resolution.resolved.branchId,
-      seenRecorded: false
+      branchId: resolution.resolved.branchId
     }),
     budget
   };
@@ -155,7 +169,7 @@ function handleVariant(
 
 type FrameSearchOutcome =
   | { readonly kind: "completed"; readonly reader: ReaderState }
-  | { readonly kind: "active"; readonly frames: ExecutionCursor };
+  | { readonly kind: "active"; readonly frames: ExecutionCursor; readonly blocks: readonly StoryBlock[] | undefined };
 
 /**
  * Pops every currently-exhausted frame (cascading through as many levels
@@ -166,33 +180,42 @@ type FrameSearchOutcome =
  * recording (Section 17.9) — into the returned `reader` rather than a
  * closure, so this function's only effect is its return value.
  */
-function popExhaustedFrames(frames: ExecutionCursor, reader: ReaderState, sceneId: string): FrameSearchOutcome {
+function popExhaustedFrames(
+  sceneBlocks: readonly StoryBlock[] | undefined,
+  frames: ExecutionCursor,
+  reader: ReaderState,
+  sceneId: string
+): FrameSearchOutcome {
   let current = frames;
   for (;;) {
     const top = current.at(-1);
     if (!top) {
       return { kind: "completed", reader };
     }
-    // Written as the literal negation of the original "exhausted" check
-    // (`!(index >= length)`, not `index < length`) because they are not
-    // equivalent for a malformed, non-numeric `index` (e.g. NaN or a
-    // string) — both `>=` and `<` are `false` for a NaN-involving
-    // comparison, so only the literal negation reproduces the original
-    // "treat anything that isn't affirmatively exhausted as active, and
-    // let block dispatch's own `default` case catch the malformed index"
-    // behavior (Section 17.11) exactly.
-    if (!(top.index >= top.blocks.length)) { // NOSONAR(typescript:S1940) — `<` is not equivalent here; see comment above
-      return { kind: "active", frames: current };
+
+    const blocks = resolveBlocks(sceneBlocks, current);
+    // `blocks === undefined` means structural resolution itself failed (a
+    // stale/malformed cursor against this document) — treated the same as
+    // an unresolved index, never as "exhausted," so block dispatch's own
+    // default case reports the error (Section 17.11). Otherwise, written
+    // as the literal negation of the "exhausted" check (`!(index >=
+    // length)`, not `index < length`) because they are not equivalent for
+    // a malformed, non-numeric `index` (e.g. NaN or a string) — both `>=`
+    // and `<` are `false` for a NaN-involving comparison, so only the
+    // literal negation reproduces the original "treat anything that isn't
+    // affirmatively exhausted as active" behavior exactly.
+    if (blocks === undefined || !(top.index >= blocks.length)) { // NOSONAR(typescript:S1940) — `<` is not equivalent here; see comment above
+      return { kind: "active", frames: current, blocks };
     }
 
     // Qualifying "empty" completed (17.9): the episode's only observable
     // outcome is reaching the end with nothing shown. Variant-seen is
     // deliberately NOT extended here by symmetry — only the scene-visit
     // rule treats completed as qualifying.
-    const sceneOrigin = current[0]?.origin;
+    const sceneFrame = current[0];
     current = popFrame(current);
     if (current.length === 0) {
-      if (sceneOrigin?.kind === "scene" && !sceneOrigin.visitRecorded) {
+      if (sceneFrame?.kind === "scene" && !sceneFrame.visitRecorded) {
         reader = recordSceneVisit(reader, sceneId);
       }
       return { kind: "completed", reader };
@@ -372,7 +395,7 @@ function executeCurrentBlock(
  * `recordVariantSeen` are called here, at the exact points a qualifying
  * `content`/`presentation`/`choice`/`completed` result is committed —
  * never for `navigation`, a runtime error, or automatic work alone. See
- * `cursor.ts`'s `CursorFrameOrigin`/`collectPendingExposure` for how this
+ * `cursor.ts`'s `CursorFrame`/`collectPendingExposure` for how this
  * survives across separate `advance()` calls (errors, step-budget
  * exhaustion) without a purely function-local computation.
  *
@@ -389,6 +412,7 @@ export function advance(
   let reader: ReaderState = runtimeState.reader;
   let budget = options?.stepBudget ?? DEFAULT_STEP_BUDGET;
 
+  let sceneBlocks: readonly StoryBlock[] | undefined;
   if (frames.length === 0) {
     const scene = document.scenes.find((s) => s.id === runtimeState.navigation.sceneId);
     if (!scene) {
@@ -398,7 +422,15 @@ export function advance(
         result: { type: "error", error: RuntimeErrors.invalidSceneTarget(runtimeState.navigation.sceneId) }
       };
     }
-    frames = pushFrame(INITIAL_CURSOR, scene.blocks, { kind: "scene", visitRecorded: false });
+    frames = pushFrame(INITIAL_CURSOR, { kind: "scene", sceneId: scene.id });
+    sceneBlocks = scene.blocks;
+  } else {
+    // Resolved exactly once per call (never per loop iteration): the
+    // cursor's own scene root never changes within one `advance()` call —
+    // only `navigateTo` can change it, and that always returns immediately
+    // with a fully-reset cursor rather than continuing this loop.
+    const sceneFrame = frames[0];
+    sceneBlocks = sceneFrame?.kind === "scene" ? resolveSceneBlocks(document, sceneFrame.sceneId) : undefined;
   }
 
   const commit = (cursorOut: ExecutionCursor, result: ExecutionResult): ExecutionStep => ({
@@ -408,7 +440,7 @@ export function advance(
   });
 
   for (;;) {
-    const popped = popExhaustedFrames(frames, reader, runtimeState.navigation.sceneId);
+    const popped = popExhaustedFrames(sceneBlocks, frames, reader, runtimeState.navigation.sceneId);
     if (popped.kind === "completed") {
       reader = popped.reader;
       return commit(INITIAL_CURSOR, { type: "completed" });
@@ -416,7 +448,7 @@ export function advance(
     frames = popped.frames;
 
     const top = frames.at(-1);
-    const block = top ? (top.blocks[top.index] as StoryBlock | undefined) : undefined;
+    const block = top && popped.blocks ? (popped.blocks[top.index] as StoryBlock | undefined) : undefined;
 
     // Rebuilt every iteration (never cached) since `story`/`reader` change
     // as the walk progresses — every expression-evaluating construct must
