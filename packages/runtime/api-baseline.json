@@ -229,6 +229,12 @@
         "signature (StoryDocument) => RuntimeState"
       ]
     },
+    "fromCursorPosition": {
+      "kind": "function",
+      "members": [
+        "signature (StoryDocument, RuntimeState, boolean | null | number | readonly JsonValue[] | string | { readonly [key: string]: JsonValue; }, \"choice\" | \"content\" | \"dialogue\" | \"error\" | \"presentation\") => { readonly ok: false; readonly reason: string; } | { readonly ok: true; readonly cursor: ExecutionCursor; readonly resolvedBlock?: StoryBlock; }"
+      ]
+    },
     "getLastSeenVariantBranch": {
       "kind": "function",
       "members": [
@@ -282,22 +288,50 @@
       "members": [
         "signature (StoryDocument, ExecutionStep, number) => ExecutionStep"
       ]
+    },
+    "toCursorPosition": {
+      "kind": "function",
+      "members": [
+        "signature (RuntimeState, ExecutionCursor) => boolean | null | number | readonly JsonValue[] | string | { readonly [key: string]: JsonValue; }"
+      ]
     }
   },
   "referencedTypes": {
     "CursorFrame": {
-      "kind": "interface",
-      "members": [
-        "readonly property blocks: readonly StoryBlock[]",
-        "readonly property index: number",
-        "readonly property origin?: { readonly kind: \"scene\"; readonly visitRecorded: boolean; } | { readonly kind: \"variant\"; readonly variantId: string; readonly branchId: string; readonly seenRecorded: boolean; }"
-      ]
-    },
-    "CursorFrameOrigin": {
       "kind": "type",
       "members": [
-        "union { readonly kind: \"scene\"; readonly visitRecorded: boolean; }",
-        "union { readonly kind: \"variant\"; readonly variantId: string; readonly branchId: string; readonly seenRecorded: boolean; }"
+        "union { readonly kind: \"conditional\"; readonly branchIndex: number; readonly index: number; }",
+        "union { readonly kind: \"scene\"; readonly sceneId: string; readonly index: number; readonly visitRecorded: boolean; }",
+        "union { readonly kind: \"variant\"; readonly variantId: string; readonly branchId: string; readonly index: number; readonly seenRecorded: boolean; }"
+      ]
+    },
+    "CursorPositionResultKind": {
+      "kind": "type",
+      "members": [
+        "union \"choice\"",
+        "union \"content\"",
+        "union \"dialogue\"",
+        "union \"error\"",
+        "union \"presentation\""
+      ]
+    },
+    "FromCursorPositionResult": {
+      "kind": "type",
+      "members": [
+        "union { readonly ok: false; readonly reason: string; }",
+        "union { readonly ok: true; readonly cursor: ExecutionCursor; readonly resolvedBlock?: StoryBlock; }"
+      ]
+    },
+    "JsonValue": {
+      "kind": "type",
+      "members": [
+        "union false",
+        "union null",
+        "union number",
+        "union readonly JsonValue[]",
+        "union string",
+        "union true",
+        "union { readonly [key: string]: JsonValue; }"
       ]
     }
   }

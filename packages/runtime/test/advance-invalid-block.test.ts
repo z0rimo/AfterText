@@ -58,7 +58,7 @@ describe("blocks the interpreter cannot execute (docs/CORE_SPEC.md Sections 17.1
   it("does not mutate its inputs", () => {
     const { document, state } = freshState("@scene s\nHi.\n");
     const broken = withBlocks(document, [{ type: "FutureBlock" }]);
-    const cursor: ExecutionCursor = [{ blocks: broken.scenes[0]!.blocks, index: 0 }];
+    const cursor: ExecutionCursor = [{ kind: "scene", sceneId: broken.scenes[0]!.id, index: 0, visitRecorded: false }];
     const before = JSON.stringify({ broken, state, cursor });
 
     advance(broken, state, cursor);
@@ -67,9 +67,9 @@ describe("blocks the interpreter cannot execute (docs/CORE_SPEC.md Sections 17.1
 
   it("a cursor index that no longer points at a block returns a runtime error", () => {
     const { document, state } = freshState("@scene s\nHi.\n");
-    const blocks = document.scenes[0]!.blocks;
+    const sceneId = document.scenes[0]!.id;
     for (const index of [-1, 0.5, Number.NaN, "length", "missing"]) {
-      const cursor = [{ blocks, index: index as number }];
+      const cursor: ExecutionCursor = [{ kind: "scene", sceneId, index: index as number, visitRecorded: false }];
       expectInvalidBlock(advance(document, state, cursor));
     }
   });

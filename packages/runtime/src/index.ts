@@ -66,3 +66,13 @@ export type { AdvanceOptions } from "./execution/advance.js";
 export { advance } from "./execution/advance.js";
 
 export { selectChoice } from "./execution/choice.js";
+
+// Save/Restore's one narrow Runtime exception (docs/CORE_SPEC.md Section
+// 33.2, 33.18): Runtime's package `exports` field restricts every import
+// to this root barrel, so Player — a separate published package — cannot
+// call an unexported Runtime function to encode/decode the opaque cursor
+// position it stores in `PlayerSnapshot`. `ExecutionCursor`'s own element
+// type (`CursorFrame`) stays unexported, as does the position payload's
+// private schema and this package's local `JsonValue` alias — only the
+// two functions themselves are public.
+export { toCursorPosition, fromCursorPosition } from "./execution/cursor-position.js";
