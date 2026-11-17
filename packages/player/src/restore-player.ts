@@ -75,14 +75,20 @@ function restorePlayerUnchecked(document: StoryDocument, snapshot: unknown): Res
   if (!runtimeStateResult.ok) return malformed(runtimeStateResult.reason);
   const runtimeState = runtimeStateResult.value;
 
-  if (!isJsonValue(snapshot.position) || !isJsonValue(snapshot.current)) {
+  // Read each property exactly once: an untrusted accessor could otherwise
+  // return a validated-looking value the first time (passing isJsonValue)
+  // and a different one the second, letting an unvalidated value drive
+  // reconstruction below.
+  const position = snapshot.position;
+  const rawCurrent = snapshot.current;
+  if (!isJsonValue(position) || !isJsonValue(rawCurrent)) {
     return malformed("position/current are not JSON-compatible.");
   }
 
-  const current = decodeCurrent(snapshot.current);
+  const current = decodeCurrent(rawCurrent);
   if (!current) return malformed("current descriptor is malformed.");
 
-  return restoreForCurrent(document, index, runtimeState, current, snapshot.position);
+  return restoreForCurrent(document, index, runtimeState, current, position);
 }
 
 function restoreForCurrent(

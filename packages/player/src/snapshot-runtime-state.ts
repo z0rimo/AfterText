@@ -69,10 +69,12 @@ function validateVisitedScenes(index: DocumentIndex, value: unknown): Validated<
   for (const sceneId of Object.keys(value)) {
     if (!index.sceneIds.has(sceneId)) return fail(`visitedScenes has an unknown scene id "${sceneId}".`);
     const entry = value[sceneId];
-    if (!isPlainRecord(entry) || !isPositiveFiniteInteger(entry.visitCount)) {
+    if (!isPlainRecord(entry)) return fail(`visitedScenes.${sceneId} is not a plain object.`);
+    const visitCount = entry.visitCount;
+    if (!isPositiveFiniteInteger(visitCount)) {
       return fail(`visitedScenes.${sceneId}.visitCount is not a positive finite integer.`);
     }
-    entries.push([sceneId, { visitCount: entry.visitCount }]);
+    entries.push([sceneId, { visitCount }]);
   }
   return ok(Object.fromEntries(entries));
 }
@@ -124,9 +126,11 @@ function validateReaderState(index: DocumentIndex, value: unknown): Validated<Re
 
 /** `navigation.sceneId` must name a real scene regardless of `current.type` (docs/CORE_SPEC.md Section 33.8 step 4 — a universal check, not conditioned on suspension kind). */
 function validateNavigationState(index: DocumentIndex, value: unknown): Validated<NavigationState> {
-  if (!isPlainRecord(value) || typeof value.sceneId !== "string") return fail("navigation is not a valid NavigationState.");
-  if (!index.sceneIds.has(value.sceneId)) return fail(`navigation.sceneId "${value.sceneId}" does not exist.`);
-  return ok({ sceneId: value.sceneId });
+  if (!isPlainRecord(value)) return fail("navigation is not a plain object.");
+  const sceneId = value.sceneId;
+  if (typeof sceneId !== "string") return fail("navigation is not a valid NavigationState.");
+  if (!index.sceneIds.has(sceneId)) return fail(`navigation.sceneId "${sceneId}" does not exist.`);
+  return ok({ sceneId });
 }
 
 export function validateRuntimeState(index: DocumentIndex, value: unknown): Validated<RuntimeState> {

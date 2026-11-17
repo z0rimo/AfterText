@@ -435,3 +435,95 @@ describe("catch-handler safety for hostile thrown values (Codex-reported P2, doc
     expect(restorePlayer(document, hostile)).toEqual({ ok: false, error: { kind: "malformedSnapshot", reason: expect.any(String) } });
   });
 });
+
+describe("read-once safety for validated untrusted fields (Codex-reported P2, docs/CORE_SPEC.md Section 33.8)", () => {
+  const { document, snapshot } = freshSnapshot();
+
+  it("reads visitedScenes[id].visitCount exactly once per restore, not once-to-validate and again-to-use", () => {
+    let reads = 0;
+    const hostileVisitedScenes = {
+      s: {
+        get visitCount() {
+          reads++;
+          return reads === 1 ? 1 : 999999.5;
+        }
+      }
+    };
+    const tampered = {
+      ...snapshot,
+      runtimeState: { ...snapshot.runtimeState, reader: { ...snapshot.runtimeState.reader, visitedScenes: hostileVisitedScenes } }
+    };
+    expect(() => restorePlayer(document, tampered)).not.toThrow();
+    reads = 0;
+    const restored = restorePlayer(document, tampered);
+    expect(reads).toBe(1);
+    if (restored.ok) expect(restored.state.runtimeState.reader.visitedScenes.s).toEqual({ visitCount: 1 });
+  });
+
+  it("reads navigation.sceneId exactly once per restore, not once-to-validate and again-to-use", () => {
+    let reads = 0;
+    const hostileNavigation = {
+      get sceneId() {
+        reads++;
+        return reads === 1 ? "s" : "ghost-scene-that-does-not-exist";
+      }
+    };
+    const tampered = { ...snapshot, runtimeState: { ...snapshot.runtimeState, navigation: hostileNavigation } };
+    expect(() => restorePlayer(document, tampered)).not.toThrow();
+    reads = 0;
+    restorePlayer(document, tampered);
+    expect(reads).toBe(1);
+  });
+
+  it("does not re-read a choice item's text/target a third time now that decodeChoiceItems captures each once", () => {
+    let textReads = 0;
+    let targetReads = 0;
+    const hostileItem = {
+      get text() {
+        textReads++;
+        return textReads <= 2 ? "Go" : 12345;
+      },
+      get target() {
+        targetReads++;
+        return targetReads <= 2 ? "a" : 67890;
+      }
+    };
+    const tampered = { ...snapshot, current: { type: "choice", items: [hostileItem] } };
+    expect(() => restorePlayer(document, tampered)).not.toThrow();
+    textReads = 0;
+    targetReads = 0;
+    restorePlayer(document, tampered);
+    expect(textReads).toBeLessThanOrEqual(2);
+    expect(targetReads).toBeLessThanOrEqual(2);
+  });
+
+  it("reads snapshot.position and snapshot.current exactly once each per restore", () => {
+    let positionReads = 0;
+    let currentReads = 0;
+    const tampered: Record<string, unknown> = {
+      formatVersion: snapshot.formatVersion,
+      documentFingerprint: snapshot.documentFingerprint,
+      runtimeState: snapshot.runtimeState
+    };
+    Object.defineProperty(tampered, "position", {
+      enumerable: true,
+      get() {
+        positionReads++;
+        return positionReads === 1 ? snapshot.position : { poisoned: true };
+      }
+    });
+    Object.defineProperty(tampered, "current", {
+      enumerable: true,
+      get() {
+        currentReads++;
+        return currentReads === 1 ? snapshot.current : { poisoned: true };
+      }
+    });
+    expect(() => restorePlayer(document, tampered)).not.toThrow();
+    positionReads = 0;
+    currentReads = 0;
+    restorePlayer(document, tampered);
+    expect(positionReads).toBe(1);
+    expect(currentReads).toBe(1);
+  });
+});

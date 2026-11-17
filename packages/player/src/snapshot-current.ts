@@ -75,8 +75,10 @@ function decodeChoiceItems(value: unknown): readonly { readonly text: string; re
   if (!Array.isArray(value)) return undefined;
   const items: { text: string; target: string }[] = [];
   for (const raw of value) {
-    if (!isPlainRecord(raw) || typeof raw.text !== "string" || typeof raw.target !== "string") return undefined;
-    items.push({ text: raw.text, target: raw.target });
+    if (!isPlainRecord(raw)) return undefined;
+    const { text, target } = raw;
+    if (typeof text !== "string" || typeof target !== "string") return undefined;
+    items.push({ text, target });
   }
   return items;
 }
