@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import type { StoryBlock } from "@aftertext/compiler";
+import type { StoryBlock, StoryDocument } from "@aftertext/compiler";
 import { advance, createRuntimeState, fromCursorPosition, selectChoice, toCursorPosition } from "../src/index.js";
 import type { ExecutionStep, RuntimeState } from "../src/index.js";
 import type { JsonValue } from "../src/execution/cursor-position.js";
@@ -35,22 +35,41 @@ function withStory(runtimeState: RuntimeState, story: Record<string, unknown>): 
   return { ...runtimeState, story: story as RuntimeState["story"] };
 }
 
+/**
+ * The locked fresh-recompile proof shape (docs/CORE_SPEC.md Section
+ * 33.20), factored out of every round-trip test below: compile `source`
+ * once as the live execution document, advance to a suspension, encode
+ * and JSON round-trip its position, then compile `source` again as a
+ * second, distinct document to decode against. `withState` lets a test
+ * seed `RuntimeState.story` before the initial `advance` (default:
+ * unchanged).
+ */
+function freshDocumentRoundTrip(
+  source: string,
+  withState: (state: RuntimeState) => RuntimeState = (state) => state
+): { readonly documentA: StoryDocument; readonly documentB: StoryDocument; readonly suspended: ExecutionStep; readonly position: JsonValue } {
+  const documentA = compileDoc(source);
+  const suspended = advance(documentA, withState(createRuntimeState(documentA)));
+  const position = roundTrip(toCursorPosition(suspended.runtimeState, suspended.cursor));
+  const documentB = compileDoc(source);
+  return { documentA, documentB, suspended, position };
+}
+
+/** Asserts a decode succeeded and narrows to its `ok: true` branch, failing with the usual message otherwise. */
+function expectDecoded(decoded: ReturnType<typeof fromCursorPosition>) {
+  expect(decoded.ok).toBe(true);
+  if (!decoded.ok) throw new Error("unreachable");
+  return decoded;
+}
+
 describe("fresh-document round trip (docs/CORE_SPEC.md Section 33.20)", () => {
   it("content: resolvedBlock is the block that produced the suspension; continuation does not re-show it", () => {
-    const source = "@scene s\nFirst.\n\nSecond.\n";
-    const documentA = compileDoc(source);
-    const state = createRuntimeState(documentA);
-    const suspended = advance(documentA, state);
+    const { documentA, documentB, suspended, position } = freshDocumentRoundTrip("@scene s\nFirst.\n\nSecond.\n");
     expect(textOf(suspended)).toBe("First.");
-
-    const position = roundTrip(toCursorPosition(suspended.runtimeState, suspended.cursor));
-    const documentB = compileDoc(source);
     expect(documentB).not.toBe(documentA);
     expect(documentB.scenes[0]).not.toBe(documentA.scenes[0]);
 
-    const decoded = fromCursorPosition(documentB, suspended.runtimeState, position, "content");
-    expect(decoded.ok).toBe(true);
-    if (!decoded.ok) throw new Error("unreachable");
+    const decoded = expectDecoded(fromCursorPosition(documentB, suspended.runtimeState, position, "content"));
     expect(decoded.resolvedBlock?.type).toBe("Paragraph");
     expect(paragraphText(decoded.resolvedBlock)).toBe("First.");
     expect(decoded.resolvedBlock).not.toBe(documentA.scenes[0]!.blocks[0]);
@@ -60,17 +79,10 @@ describe("fresh-document round trip (docs/CORE_SPEC.md Section 33.20)", () => {
   });
 
   it("dialogue: resolvedBlock is the freshly-compiled DialogueNode; continuation resumes after it", () => {
-    const source = "@scene s\n@say speaker=Alice\nHello.\n\nAfter.\n";
-    const documentA = compileDoc(source);
-    const state = createRuntimeState(documentA);
-    const suspended = advance(documentA, state);
+    const { documentA, documentB, suspended, position } = freshDocumentRoundTrip("@scene s\n@say speaker=Alice\nHello.\n\nAfter.\n");
     expect(suspended.result.type).toBe("dialogue");
 
-    const position = roundTrip(toCursorPosition(suspended.runtimeState, suspended.cursor));
-    const documentB = compileDoc(source);
-    const decoded = fromCursorPosition(documentB, suspended.runtimeState, position, "dialogue");
-    expect(decoded.ok).toBe(true);
-    if (!decoded.ok) throw new Error("unreachable");
+    const decoded = expectDecoded(fromCursorPosition(documentB, suspended.runtimeState, position, "dialogue"));
     expect(decoded.resolvedBlock?.type).toBe("Dialogue");
     expect(decoded.resolvedBlock).not.toBe(documentA.scenes[0]!.blocks[0]);
 
@@ -80,17 +92,10 @@ describe("fresh-document round trip (docs/CORE_SPEC.md Section 33.20)", () => {
   });
 
   it("presentation: command comes from fresh document B; continuation resumes after it", () => {
-    const source = "@scene s\n@background room.jpg\nAfter.\n";
-    const documentA = compileDoc(source);
-    const state = createRuntimeState(documentA);
-    const suspended = advance(documentA, state);
+    const { documentA, documentB, suspended, position } = freshDocumentRoundTrip("@scene s\n@background room.jpg\nAfter.\n");
     expect(suspended.result.type).toBe("presentation");
 
-    const position = roundTrip(toCursorPosition(suspended.runtimeState, suspended.cursor));
-    const documentB = compileDoc(source);
-    const decoded = fromCursorPosition(documentB, suspended.runtimeState, position, "presentation");
-    expect(decoded.ok).toBe(true);
-    if (!decoded.ok) throw new Error("unreachable");
+    const decoded = expectDecoded(fromCursorPosition(documentB, suspended.runtimeState, position, "presentation"));
     expect(decoded.resolvedBlock?.type).toBe("Presentation");
     expect(decoded.resolvedBlock).not.toBe(documentA.scenes[0]!.blocks[0]);
 
@@ -100,16 +105,10 @@ describe("fresh-document round trip (docs/CORE_SPEC.md Section 33.20)", () => {
 
   it("choice: cursor stays at the ChoiceNode; resolvedBlock is that ChoiceNode", () => {
     const source = ["@scene s", "@choice", "- Go -> elsewhere", "@end", "", "@scene elsewhere", "There."].join("\n");
-    const documentA = compileDoc(source);
-    const state = createRuntimeState(documentA);
-    const suspended = advance(documentA, state);
+    const { documentB, suspended, position } = freshDocumentRoundTrip(source);
     expect(suspended.result.type).toBe("choice");
 
-    const position = roundTrip(toCursorPosition(suspended.runtimeState, suspended.cursor));
-    const documentB = compileDoc(source);
-    const decoded = fromCursorPosition(documentB, suspended.runtimeState, position, "choice");
-    expect(decoded.ok).toBe(true);
-    if (!decoded.ok) throw new Error("unreachable");
+    const decoded = expectDecoded(fromCursorPosition(documentB, suspended.runtimeState, position, "choice"));
     expect(decoded.resolvedBlock?.type).toBe("Choice");
     expect(decoded.cursor).toEqual(suspended.cursor); // AST-free, so structural equality holds across documents
 
@@ -121,19 +120,15 @@ describe("fresh-document round trip (docs/CORE_SPEC.md Section 33.20)", () => {
     const source = ["@scene s", "@choice", "- Always -> a", "- Gated -> b if flag", "@end", "@scene a", "A.", "@scene b", "B."].join(
       "\n"
     );
-    const documentA = compileDoc(source);
-    const state = createRuntimeState(documentA);
-    const suspended = advance(documentA, withStory(state, { flag: true }));
+    const { documentB, suspended, position } = freshDocumentRoundTrip(source, (state) => withStory(state, { flag: true }));
     expect(suspended.result.type).toBe("choice");
     if (suspended.result.type === "choice") expect(suspended.result.items).toHaveLength(2);
 
-    const position = roundTrip(toCursorPosition(suspended.runtimeState, suspended.cursor));
-    const documentB = compileDoc(source);
     // Decode with a runtimeState whose story would exclude the gated item if
     // filterChoiceItems were (incorrectly) re-run during decode.
-    const decoded = fromCursorPosition(documentB, withStory(suspended.runtimeState, { flag: false }), position, "choice");
-    expect(decoded.ok).toBe(true);
-    if (!decoded.ok) throw new Error("unreachable");
+    const decoded = expectDecoded(
+      fromCursorPosition(documentB, withStory(suspended.runtimeState, { flag: false }), position, "choice")
+    );
     expect(decoded.resolvedBlock?.type).toBe("Choice");
     if (decoded.resolvedBlock?.type === "Choice") expect(decoded.resolvedBlock.items).toHaveLength(2);
   });
@@ -142,16 +137,10 @@ describe("fresh-document round trip (docs/CORE_SPEC.md Section 33.20)", () => {
 describe("structural nesting (docs/CORE_SPEC.md Section 33.4, 33.10)", () => {
   it("nested Conditional round-trips through a fresh document", () => {
     const source = ["@scene s", "@if true", "@if true", "Inner.", "@end", "Outer.", "@end"].join("\n");
-    const documentA = compileDoc(source);
-    const state = createRuntimeState(documentA);
-    const suspended = advance(documentA, state);
+    const { documentB, suspended, position } = freshDocumentRoundTrip(source);
     expect(textOf(suspended)).toBe("Inner.");
 
-    const position = roundTrip(toCursorPosition(suspended.runtimeState, suspended.cursor));
-    const documentB = compileDoc(source);
-    const decoded = fromCursorPosition(documentB, suspended.runtimeState, position, "content");
-    expect(decoded.ok).toBe(true);
-    if (!decoded.ok) throw new Error("unreachable");
+    const decoded = expectDecoded(fromCursorPosition(documentB, suspended.runtimeState, position, "content"));
 
     const next = advance(documentB, suspended.runtimeState, decoded.cursor);
     expect(textOf(next)).toBe("Outer.");
@@ -159,16 +148,10 @@ describe("structural nesting (docs/CORE_SPEC.md Section 33.4, 33.10)", () => {
 
   it("nested Variant round-trips through a fresh document", () => {
     const source = ["@scene s", "@variant v", "@when true", "First.", "", "Second.", "@end"].join("\n");
-    const documentA = compileDoc(source);
-    const state = createRuntimeState(documentA);
-    const suspended = advance(documentA, state);
+    const { documentB, suspended, position } = freshDocumentRoundTrip(source);
     expect(textOf(suspended)).toBe("First.");
 
-    const position = roundTrip(toCursorPosition(suspended.runtimeState, suspended.cursor));
-    const documentB = compileDoc(source);
-    const decoded = fromCursorPosition(documentB, suspended.runtimeState, position, "content");
-    expect(decoded.ok).toBe(true);
-    if (!decoded.ok) throw new Error("unreachable");
+    const decoded = expectDecoded(fromCursorPosition(documentB, suspended.runtimeState, position, "content"));
 
     const next = advance(documentB, suspended.runtimeState, decoded.cursor);
     expect(textOf(next)).toBe("Second.");
@@ -176,17 +159,11 @@ describe("structural nesting (docs/CORE_SPEC.md Section 33.4, 33.10)", () => {
 
   it("Conditional inside Variant round-trips through a fresh document", () => {
     const source = ["@scene s", "@variant mood", "@when true", "@if true", "Deep.", "@end", "@end"].join("\n");
-    const documentA = compileDoc(source);
-    const state = createRuntimeState(documentA);
-    const suspended = advance(documentA, state);
+    const { documentB, suspended, position } = freshDocumentRoundTrip(source);
     expect(textOf(suspended)).toBe("Deep.");
     expect(suspended.cursor).toHaveLength(3);
 
-    const position = roundTrip(toCursorPosition(suspended.runtimeState, suspended.cursor));
-    const documentB = compileDoc(source);
-    const decoded = fromCursorPosition(documentB, suspended.runtimeState, position, "content");
-    expect(decoded.ok).toBe(true);
-    if (!decoded.ok) throw new Error("unreachable");
+    const decoded = expectDecoded(fromCursorPosition(documentB, suspended.runtimeState, position, "content"));
     expect(decoded.cursor).toEqual(suspended.cursor);
 
     const completed = advance(documentB, suspended.runtimeState, decoded.cursor);
@@ -195,17 +172,11 @@ describe("structural nesting (docs/CORE_SPEC.md Section 33.4, 33.10)", () => {
 
   it("Variant inside Conditional round-trips through a fresh document", () => {
     const source = ["@scene s", "@if true", "@variant mood", "@when true", "Deep.", "@end", "@end"].join("\n");
-    const documentA = compileDoc(source);
-    const state = createRuntimeState(documentA);
-    const suspended = advance(documentA, state);
+    const { documentB, suspended, position } = freshDocumentRoundTrip(source);
     expect(textOf(suspended)).toBe("Deep.");
     expect(suspended.cursor).toHaveLength(3);
 
-    const position = roundTrip(toCursorPosition(suspended.runtimeState, suspended.cursor));
-    const documentB = compileDoc(source);
-    const decoded = fromCursorPosition(documentB, suspended.runtimeState, position, "content");
-    expect(decoded.ok).toBe(true);
-    if (!decoded.ok) throw new Error("unreachable");
+    const decoded = expectDecoded(fromCursorPosition(documentB, suspended.runtimeState, position, "content"));
     expect(decoded.cursor).toEqual(suspended.cursor);
 
     const completed = advance(documentB, suspended.runtimeState, decoded.cursor);
@@ -224,17 +195,11 @@ describe("structural nesting (docs/CORE_SPEC.md Section 33.4, 33.10)", () => {
       "@end",
       "@end"
     ].join("\n");
-    const documentA = compileDoc(source);
-    const state = createRuntimeState(documentA);
-    const suspended = advance(documentA, state);
+    const { documentB, suspended, position } = freshDocumentRoundTrip(source);
     expect(textOf(suspended)).toBe("Deepest.");
     expect(suspended.cursor).toHaveLength(4);
 
-    const position = roundTrip(toCursorPosition(suspended.runtimeState, suspended.cursor));
-    const documentB = compileDoc(source);
-    const decoded = fromCursorPosition(documentB, suspended.runtimeState, position, "content");
-    expect(decoded.ok).toBe(true);
-    if (!decoded.ok) throw new Error("unreachable");
+    const decoded = expectDecoded(fromCursorPosition(documentB, suspended.runtimeState, position, "content"));
     expect(decoded.cursor).toEqual(suspended.cursor);
   });
 });
