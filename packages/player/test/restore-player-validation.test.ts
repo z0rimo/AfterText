@@ -540,3 +540,17 @@ describe("bounded total work for shared (DAG-shaped) JSON graphs (Codex-reported
     expect(elapsedMs).toBeLessThan(2000);
   });
 });
+
+describe("bounded work for huge sparse arrays (Codex-reported P2, docs/CORE_SPEC.md Section 33.8)", () => {
+  const { document, snapshot } = freshSnapshot();
+
+  it("rejects a sparse array claiming an astronomical length quickly instead of scanning every index", () => {
+    const sparse = new Array(0xffffffff);
+    const start = performance.now();
+    expect(() => restorePlayer(document, { ...snapshot, position: sparse })).not.toThrow();
+    const result = restorePlayer(document, { ...snapshot, position: sparse });
+    const elapsedMs = performance.now() - start;
+    expect(result).toEqual({ ok: false, error: { kind: "malformedSnapshot", reason: expect.any(String) } });
+    expect(elapsedMs).toBeLessThan(2000);
+  });
+});

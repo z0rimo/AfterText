@@ -80,8 +80,21 @@ function hasOrdinaryRecordPrototype(value: object): boolean {
  * evaluated correctly on its own terms) so a shared reference is walked
  * at most once, bounding total work by the number of distinct objects in
  * the graph rather than the number of paths to them.
+ *
+ * Neither the depth cap nor memoization bounds a single array's own
+ * *length*: `Array.isArray(value)` accepts a sparse array like
+ * `new Array(0xffffffff)`, and `.every()` still performs one
+ * `HasProperty` check per index up to that length — billions of
+ * synchronous checks for one shallow, memory-cheap array, hanging
+ * `restorePlayer` before the depth cap or memo ever come into play
+ * (both only limit work *below* a node, not the cost of scanning the
+ * node itself). `MAX_JSON_ARRAY_LENGTH` rejects any array claiming to be
+ * larger than any real `position`/`current` payload could ever need —
+ * the longest legitimate case is a Choice's offered items, always a
+ * tiny, bounded, authored list.
  */
 const MAX_JSON_VALUE_DEPTH = 64;
+const MAX_JSON_ARRAY_LENGTH = 10_000;
 
 function isJsonValueAtDepth(value: unknown, depth: number, memo: Map<object, boolean>): value is JsonValue {
   if (value === null || typeof value === "string" || typeof value === "boolean") return true;
@@ -91,7 +104,7 @@ function isJsonValueAtDepth(value: unknown, depth: number, memo: Map<object, boo
   if (cached !== undefined) return cached;
   if (depth >= MAX_JSON_VALUE_DEPTH) return false;
   const result = Array.isArray(value)
-    ? value.every((item) => isJsonValueAtDepth(item, depth + 1, memo))
+    ? value.length <= MAX_JSON_ARRAY_LENGTH && value.every((item) => isJsonValueAtDepth(item, depth + 1, memo))
     : hasOrdinaryRecordPrototype(value) && Object.values(value).every((item) => isJsonValueAtDepth(item, depth + 1, memo));
   memo.set(value, result);
   return result;
