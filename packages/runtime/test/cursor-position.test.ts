@@ -134,73 +134,73 @@ describe("fresh-document round trip (docs/CORE_SPEC.md Section 33.20)", () => {
   });
 });
 
+/**
+ * One "structural nesting round-trips through a fresh document" case
+ * (docs/CORE_SPEC.md Section 33.4, 33.10): the suspension text to expect,
+ * the cursor depth to assert (and, only then, that `decoded.cursor`
+ * exactly matches `suspended.cursor` — the original cursor was itself
+ * built against document A, so this also re-proves AST-freedom), and what
+ * continuing from the decoded cursor should produce, if anything.
+ */
+interface NestingRoundTripCase {
+  readonly name: string;
+  readonly source: string;
+  readonly suspendedText: string;
+  readonly cursorDepth?: number;
+  readonly after?: "completed" | { readonly text: string };
+}
+
+const NESTING_ROUND_TRIP_CASES: readonly NestingRoundTripCase[] = [
+  {
+    name: "nested Conditional",
+    source: ["@scene s", "@if true", "@if true", "Inner.", "@end", "Outer.", "@end"].join("\n"),
+    suspendedText: "Inner.",
+    after: { text: "Outer." }
+  },
+  {
+    name: "nested Variant",
+    source: ["@scene s", "@variant v", "@when true", "First.", "", "Second.", "@end"].join("\n"),
+    suspendedText: "First.",
+    after: { text: "Second." }
+  },
+  {
+    name: "Conditional inside Variant",
+    source: ["@scene s", "@variant mood", "@when true", "@if true", "Deep.", "@end", "@end"].join("\n"),
+    suspendedText: "Deep.",
+    cursorDepth: 3,
+    after: "completed"
+  },
+  {
+    name: "Variant inside Conditional",
+    source: ["@scene s", "@if true", "@variant mood", "@when true", "Deep.", "@end", "@end"].join("\n"),
+    suspendedText: "Deep.",
+    cursorDepth: 3,
+    after: "completed"
+  },
+  {
+    name: "multiple nested levels (Conditional > Variant > Conditional)",
+    source: ["@scene s", "@if true", "@variant outer", "@when true", "@if true", "Deepest.", "@end", "@end", "@end"].join("\n"),
+    suspendedText: "Deepest.",
+    cursorDepth: 4
+  }
+];
+
 describe("structural nesting (docs/CORE_SPEC.md Section 33.4, 33.10)", () => {
-  it("nested Conditional round-trips through a fresh document", () => {
-    const source = ["@scene s", "@if true", "@if true", "Inner.", "@end", "Outer.", "@end"].join("\n");
+  it.each(NESTING_ROUND_TRIP_CASES)("$name round-trips through a fresh document", ({ source, suspendedText, cursorDepth, after }) => {
     const { documentB, suspended, position } = freshDocumentRoundTrip(source);
-    expect(textOf(suspended)).toBe("Inner.");
+    expect(textOf(suspended)).toBe(suspendedText);
+    if (cursorDepth !== undefined) expect(suspended.cursor).toHaveLength(cursorDepth);
 
     const decoded = expectDecoded(fromCursorPosition(documentB, suspended.runtimeState, position, "content"));
+    if (cursorDepth !== undefined) expect(decoded.cursor).toEqual(suspended.cursor);
 
-    const next = advance(documentB, suspended.runtimeState, decoded.cursor);
-    expect(textOf(next)).toBe("Outer.");
-  });
-
-  it("nested Variant round-trips through a fresh document", () => {
-    const source = ["@scene s", "@variant v", "@when true", "First.", "", "Second.", "@end"].join("\n");
-    const { documentB, suspended, position } = freshDocumentRoundTrip(source);
-    expect(textOf(suspended)).toBe("First.");
-
-    const decoded = expectDecoded(fromCursorPosition(documentB, suspended.runtimeState, position, "content"));
-
-    const next = advance(documentB, suspended.runtimeState, decoded.cursor);
-    expect(textOf(next)).toBe("Second.");
-  });
-
-  it("Conditional inside Variant round-trips through a fresh document", () => {
-    const source = ["@scene s", "@variant mood", "@when true", "@if true", "Deep.", "@end", "@end"].join("\n");
-    const { documentB, suspended, position } = freshDocumentRoundTrip(source);
-    expect(textOf(suspended)).toBe("Deep.");
-    expect(suspended.cursor).toHaveLength(3);
-
-    const decoded = expectDecoded(fromCursorPosition(documentB, suspended.runtimeState, position, "content"));
-    expect(decoded.cursor).toEqual(suspended.cursor);
-
-    const completed = advance(documentB, suspended.runtimeState, decoded.cursor);
-    expect(completed.result).toEqual({ type: "completed" });
-  });
-
-  it("Variant inside Conditional round-trips through a fresh document", () => {
-    const source = ["@scene s", "@if true", "@variant mood", "@when true", "Deep.", "@end", "@end"].join("\n");
-    const { documentB, suspended, position } = freshDocumentRoundTrip(source);
-    expect(textOf(suspended)).toBe("Deep.");
-    expect(suspended.cursor).toHaveLength(3);
-
-    const decoded = expectDecoded(fromCursorPosition(documentB, suspended.runtimeState, position, "content"));
-    expect(decoded.cursor).toEqual(suspended.cursor);
-
-    const completed = advance(documentB, suspended.runtimeState, decoded.cursor);
-    expect(completed.result).toEqual({ type: "completed" });
-  });
-
-  it("multiple nested levels (Conditional > Variant > Conditional) round-trip through a fresh document", () => {
-    const source = [
-      "@scene s",
-      "@if true",
-      "@variant outer",
-      "@when true",
-      "@if true",
-      "Deepest.",
-      "@end",
-      "@end",
-      "@end"
-    ].join("\n");
-    const { documentB, suspended, position } = freshDocumentRoundTrip(source);
-    expect(textOf(suspended)).toBe("Deepest.");
-    expect(suspended.cursor).toHaveLength(4);
-
-    const decoded = expectDecoded(fromCursorPosition(documentB, suspended.runtimeState, position, "content"));
-    expect(decoded.cursor).toEqual(suspended.cursor);
+    if (after === "completed") {
+      const completed = advance(documentB, suspended.runtimeState, decoded.cursor);
+      expect(completed.result).toEqual({ type: "completed" });
+    } else if (after) {
+      const next = advance(documentB, suspended.runtimeState, decoded.cursor);
+      expect(textOf(next)).toBe(after.text);
+    }
   });
 });
 
