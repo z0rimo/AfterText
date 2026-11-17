@@ -155,7 +155,9 @@ function canonicalizeScene(scene: SceneNode): JsonValue {
  * explicitness fix, not a behavior change.
  */
 function compareOrdinal(a: string, b: string): number {
-  return a < b ? -1 : a > b ? 1 : 0;
+  if (a < b) return -1;
+  if (a > b) return 1;
+  return 0;
 }
 
 /** Sorted-key canonicalization (docs/CORE_SPEC.md Section 33.5): `initialState` is an unordered authored map, so authored key order must never affect the fingerprint, unlike every array-shaped field above. */
