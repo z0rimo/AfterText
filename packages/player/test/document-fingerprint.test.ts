@@ -63,65 +63,41 @@ describe("document fingerprint — mutation", () => {
   });
 
   const MUTATION_CASES: readonly { readonly name: string; readonly a: string; readonly b: string }[] = [
-    {
-      name: "an initialState value",
-      a: ["---", "state:", "  a: 1", "---", "@scene s", "Hi."].join("\n"),
-      b: ["---", "state:", "  a: 2", "---", "@scene s", "Hi."].join("\n")
-    },
-    {
-      name: "scene order",
-      a: ["@scene s", "Hi.", "", "@scene t", "Bye."].join("\n"),
-      b: ["@scene t", "Bye.", "", "@scene s", "Hi."].join("\n")
-    },
-    {
-      name: "block order",
-      a: ["@scene s", "First.", "", "Second."].join("\n"),
-      b: ["@scene s", "Second.", "", "First."].join("\n")
-    },
-    {
-      name: "Dialogue text",
-      a: "@scene s\n@say speaker=Alice\nHello.\n",
-      b: "@scene s\n@say speaker=Alice\nGoodbye.\n"
-    },
+    { name: "an initialState value", a: "---\nstate:\n  a: 1\n---\n@scene s\nHi.", b: "---\nstate:\n  a: 2\n---\n@scene s\nHi." },
+    { name: "scene order", a: "@scene s\nHi.\n\n@scene t\nBye.", b: "@scene t\nBye.\n\n@scene s\nHi." },
+    { name: "block order", a: "@scene s\nFirst.\n\nSecond.", b: "@scene s\nSecond.\n\nFirst." },
+    { name: "Dialogue text", a: "@scene s\n@say speaker=Alice\nHello.\n", b: "@scene s\n@say speaker=Alice\nGoodbye.\n" },
     {
       name: "a Choice target",
-      a: ["@scene s", "@choice", "- Go -> a", "@end", "@scene a", "A.", "@scene b", "B."].join("\n"),
-      b: ["@scene s", "@choice", "- Go -> b", "@end", "@scene a", "A.", "@scene b", "B."].join("\n")
+      a: "@scene s\n@choice\n- Go -> a\n@end\n@scene a\nA.\n@scene b\nB.",
+      b: "@scene s\n@choice\n- Go -> b\n@end\n@scene a\nA.\n@scene b\nB."
     },
-    {
-      name: "a @set expression",
-      a: ["@scene s", "@set a = 1", "Hi."].join("\n"),
-      b: ["@scene s", "@set a = 2", "Hi."].join("\n")
-    },
-    {
-      name: "a Presentation authored value",
-      a: ["@scene s", "@background room.jpg", "Hi."].join("\n"),
-      b: ["@scene s", "@background hall.jpg", "Hi."].join("\n")
-    },
+    { name: "a @set expression", a: "@scene s\n@set a = 1\nHi.", b: "@scene s\n@set a = 2\nHi." },
+    { name: "a Presentation authored value", a: "@scene s\n@background room.jpg\nHi.", b: "@scene s\n@background hall.jpg\nHi." },
     {
       name: "a Conditional condition",
-      a: ["@scene s", "@set a = 1", "@if a == 1", "Hi.", "@end"].join("\n"),
-      b: ["@scene s", "@set a = 1", "@if a == 2", "Hi.", "@end"].join("\n")
+      a: "@scene s\n@set a = 1\n@if a == 1\nHi.\n@end",
+      b: "@scene s\n@set a = 1\n@if a == 2\nHi.\n@end"
     },
     {
       name: "Conditional branch order",
-      a: ["@scene s", "@set a = 1", "@if a == 1", "One.", "@elseif a == 2", "Two.", "@end"].join("\n"),
-      b: ["@scene s", "@set a = 1", "@if a == 2", "Two.", "@elseif a == 1", "One.", "@end"].join("\n")
+      a: "@scene s\n@set a = 1\n@if a == 1\nOne.\n@elseif a == 2\nTwo.\n@end",
+      b: "@scene s\n@set a = 1\n@if a == 2\nTwo.\n@elseif a == 1\nOne.\n@end"
     },
     {
       name: "a Variant id",
-      a: ["@scene s", "@variant mood", "@when true", "Hi.", "@end"].join("\n"),
-      b: ["@scene s", "@variant tone", "@when true", "Hi.", "@end"].join("\n")
+      a: "@scene s\n@variant mood\n@when true\nHi.\n@end",
+      b: "@scene s\n@variant tone\n@when true\nHi.\n@end"
     },
     {
       name: "Variant branch order",
-      a: ["@scene s", "@variant mood", "@when true", "Happy.", "@when false", "Sad.", "@end"].join("\n"),
-      b: ["@scene s", "@variant mood", "@when false", "Sad.", "@when true", "Happy.", "@end"].join("\n")
+      a: "@scene s\n@variant mood\n@when true\nHappy.\n@when false\nSad.\n@end",
+      b: "@scene s\n@variant mood\n@when false\nSad.\n@when true\nHappy.\n@end"
     },
     {
       name: "a Goto target",
-      a: ["@scene s", "@goto a", "@scene a", "A.", "@scene b", "B."].join("\n"),
-      b: ["@scene s", "@goto b", "@scene a", "A.", "@scene b", "B."].join("\n")
+      a: "@scene s\n@goto a\n@scene a\nA.\n@scene b\nB.",
+      b: "@scene s\n@goto b\n@scene a\nA.\n@scene b\nB."
     }
   ];
 
