@@ -43,7 +43,7 @@ const MASK_64 = 0xffffffffffffffffn;
 function fnv1a64Hex(input: string): string {
   let hash = FNV_OFFSET_BASIS_64;
   for (let i = 0; i < input.length; i++) {
-    const code = input.charCodeAt(i);
+    const code = input.charCodeAt(i); // NOSONAR(typescript:S7758) — intentional UTF-16 code-unit iteration, not text processing; see comment above
     const highByte = BigInt((code >> 8) & 0xff);
     const lowByte = BigInt(code & 0xff);
     hash = ((hash ^ highByte) * FNV_PRIME_64) & MASK_64;
