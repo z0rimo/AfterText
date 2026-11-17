@@ -296,24 +296,18 @@ describe("navigation tests", () => {
     return suspended;
   }
 
-  it("rejects current.to !== runtimeState.navigation.sceneId", () => {
-    const suspended = navigatedSnapshot();
-    const snapshot = snapshotPlayer(document, suspended);
-    const navigated = {
-      ...snapshot,
-      current: { type: "navigation", from: "s", to: "a" },
-      runtimeState: { ...snapshot.runtimeState, navigation: { sceneId: "s" } }
-    };
-    expect(restorePlayer(document, navigated)).toEqual({ ok: false, error: { kind: "malformedSnapshot", reason: expect.any(String) } });
-  });
+  const REJECTED_NAVIGATION_CASES: readonly { readonly name: string; readonly from: string; readonly to: string; readonly navigationSceneId: string }[] = [
+    { name: "rejects current.to !== runtimeState.navigation.sceneId", from: "s", to: "a", navigationSceneId: "s" },
+    { name: "rejects an unknown from scene", from: "ghost", to: "a", navigationSceneId: "a" }
+  ];
 
-  it("rejects an unknown from scene", () => {
+  it.each(REJECTED_NAVIGATION_CASES)("$name", ({ from, to, navigationSceneId }) => {
     const suspended = navigatedSnapshot();
     const snapshot = snapshotPlayer(document, suspended);
     const navigated = {
       ...snapshot,
-      current: { type: "navigation", from: "ghost", to: "a" },
-      runtimeState: { ...snapshot.runtimeState, navigation: { sceneId: "a" } }
+      current: { type: "navigation", from, to },
+      runtimeState: { ...snapshot.runtimeState, navigation: { sceneId: navigationSceneId } }
     };
     expect(restorePlayer(document, navigated)).toEqual({ ok: false, error: { kind: "malformedSnapshot", reason: expect.any(String) } });
   });

@@ -144,10 +144,24 @@ function canonicalizeScene(scene: SceneNode): JsonValue {
   return ["Scene", scene.id, scene.blocks.map(canonicalizeBlock)];
 }
 
+/**
+ * Ordinal (not locale-aware) string comparison, explicit rather than
+ * relying on `Array.prototype.sort()`'s own unspecified-by-omission
+ * default: this fingerprint must be deterministic across every JS
+ * environment (docs/CORE_SPEC.md Section 33.5), so the key order here
+ * must never depend on the host's locale/ICU data the way
+ * `String#localeCompare` would. Produces the exact same UTF-16-code-unit
+ * order the engine's own default string sort already uses — this is an
+ * explicitness fix, not a behavior change.
+ */
+function compareOrdinal(a: string, b: string): number {
+  return a < b ? -1 : a > b ? 1 : 0;
+}
+
 /** Sorted-key canonicalization (docs/CORE_SPEC.md Section 33.5): `initialState` is an unordered authored map, so authored key order must never affect the fingerprint, unlike every array-shaped field above. */
 function canonicalizeInitialState(initialState: StoryStateDefinition): JsonValue {
   return Object.keys(initialState)
-    .sort()
+    .sort(compareOrdinal)
     .map((key): JsonValue => [key, canonicalizeTypedPrimitive(initialState[key]!)]);
 }
 

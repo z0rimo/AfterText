@@ -39,75 +39,64 @@ function textOf(player: PlayerState): string {
   throw new Error(`expected content, got ${player.current?.type}`);
 }
 
+/**
+ * The shared "suspend on document A, round-trip through JSON against a
+ * freshly compiled document B, restore" prologue every fresh-recompile
+ * test below needs. Throws (test-only — never a production pattern) if
+ * restore fails, since every test here expects success; each test keeps
+ * its own kind-specific assertions and continuation inline.
+ */
+function suspendRoundTripAndRestore(source: string): { readonly suspended: PlayerState; readonly documentB: StoryDocument; readonly state: PlayerState } {
+  const documentA = compileDoc(source);
+  const suspended = advancePlayer(documentA, createPlayer(documentA));
+  const { documentB, parsed } = roundTripFreshDocument(source, suspended);
+  const restored = restorePlayer(documentB, parsed);
+  if (!restored.ok) throw new Error(`expected successful restore, got ${JSON.stringify(restored.error)}`);
+  return { suspended, documentB, state: restored.state };
+}
+
 describe("fresh-recompile conformance — every suspension kind", () => {
   it("content: resolved AST comes from document B, continuation resumes correctly", () => {
-    const source = "@scene s\nFirst.\n\nSecond.\n";
-    const documentA = compileDoc(source);
-    const suspended = advancePlayer(documentA, createPlayer(documentA));
+    const { suspended, documentB, state } = suspendRoundTripAndRestore("@scene s\nFirst.\n\nSecond.\n");
     expect(textOf(suspended)).toBe("First.");
-
-    const { documentB, parsed } = roundTripFreshDocument(source, suspended);
-    const restored = restorePlayer(documentB, parsed);
-    expect(restored.ok).toBe(true);
-    if (!restored.ok) throw new Error("unreachable");
-    const restoredCurrent = restored.state.current;
+    const restoredCurrent = state.current;
     if (restoredCurrent?.type === "content") {
       expect(documentB.scenes.some((s) => s.blocks.includes(restoredCurrent.block))).toBe(true);
     }
 
-    const next = advancePlayer(documentB, restored.state);
+    const next = advancePlayer(documentB, state);
     expect(textOf(next)).toBe("Second.");
   });
 
   it("dialogue: speaker/content come from document B", () => {
-    const source = "@scene s\n@say speaker=Alice\nHello.\n\nAfter.\n";
-    const documentA = compileDoc(source);
-    const suspended = advancePlayer(documentA, createPlayer(documentA));
+    const { suspended, documentB, state } = suspendRoundTripAndRestore("@scene s\n@say speaker=Alice\nHello.\n\nAfter.\n");
     expect(suspended.current?.type).toBe("dialogue");
-
-    const { documentB, parsed } = roundTripFreshDocument(source, suspended);
-    const restored = restorePlayer(documentB, parsed);
-    expect(restored.ok).toBe(true);
-    if (!restored.ok) throw new Error("unreachable");
-    expect(restored.state.current).toEqual({
+    expect(state.current).toEqual({
       type: "dialogue",
       speaker: "Alice",
       content: [{ type: "Text", value: "Hello.", span: expect.anything() }]
     });
 
-    const next = advancePlayer(documentB, restored.state);
+    const next = advancePlayer(documentB, state);
     expect(textOf(next)).toBe("After.");
   });
 
   it("presentation: command comes from document B, no application occurs", () => {
-    const source = "@scene s\n@background room.jpg\nAfter.\n";
-    const documentA = compileDoc(source);
-    const suspended = advancePlayer(documentA, createPlayer(documentA));
+    const { suspended, documentB, state } = suspendRoundTripAndRestore("@scene s\n@background room.jpg\nAfter.\n");
     expect(suspended.current?.type).toBe("presentation");
+    expect(state.current).toEqual({ type: "presentation", command: { type: "Background", image: "room.jpg" } });
 
-    const { documentB, parsed } = roundTripFreshDocument(source, suspended);
-    const restored = restorePlayer(documentB, parsed);
-    expect(restored.ok).toBe(true);
-    if (!restored.ok) throw new Error("unreachable");
-    expect(restored.state.current).toEqual({ type: "presentation", command: { type: "Background", image: "room.jpg" } });
-
-    const next = advancePlayer(documentB, restored.state);
+    const next = advancePlayer(documentB, state);
     expect(textOf(next)).toBe("After.");
   });
 
   it("choice: persisted items reused verbatim, filtering never re-run, navigates correctly on B", () => {
     const source = ["@scene s", "@choice", "- Go -> elsewhere", "@end", "", "@scene elsewhere", "There."].join("\n");
-    const documentA = compileDoc(source);
-    const suspended = advancePlayer(documentA, createPlayer(documentA));
+    const { suspended, documentB, state } = suspendRoundTripAndRestore(source);
     expect(suspended.current?.type).toBe("choice");
+    expect(state.current).toEqual({ type: "choice", items: [{ index: 0, text: "Go", target: "elsewhere" }] });
 
-    const { documentB, parsed } = roundTripFreshDocument(source, suspended);
-    const restored = restorePlayer(documentB, parsed);
-    expect(restored.ok).toBe(true);
-    if (!restored.ok) throw new Error("unreachable");
-    expect(restored.state.current).toEqual({ type: "choice", items: [{ index: 0, text: "Go", target: "elsewhere" }] });
-
-    const navigated = selectPlayerChoice(documentB, restored.state, 0);
+    const navigated = selectPlayerChoice(documentB, state, 0);
     expect(navigated.current).toEqual({ type: "navigation", from: "s", to: "elsewhere" });
     const next = advancePlayer(documentB, navigated);
     expect(textOf(next)).toBe("There.");
@@ -115,19 +104,13 @@ describe("fresh-recompile conformance — every suspension kind", () => {
 
   it("error: cursor reconstructed against document B, span never retained", () => {
     const source = ["---", "state:", "  divisor: 0", "---", "@scene s", "@set a = 10 / divisor", "Hi."].join("\n");
-    const documentA = compileDoc(source);
-    const failed = advancePlayer(documentA, createPlayer(documentA));
-    expect(failed.current?.type).toBe("error");
-    if (failed.current?.type === "error") expect(failed.current.error.span).toBeDefined();
+    const { suspended, documentB, state } = suspendRoundTripAndRestore(source);
+    expect(suspended.current?.type).toBe("error");
+    if (suspended.current?.type === "error") expect(suspended.current.error.span).toBeDefined();
+    expect(state.current).toEqual({ type: "error", error: { kind: "division-by-zero", message: expect.any(String) } });
+    if (state.current?.type === "error") expect(state.current.error.span).toBeUndefined();
 
-    const { documentB, parsed } = roundTripFreshDocument(source, failed);
-    const restored = restorePlayer(documentB, parsed);
-    expect(restored.ok).toBe(true);
-    if (!restored.ok) throw new Error("unreachable");
-    expect(restored.state.current).toEqual({ type: "error", error: { kind: "division-by-zero", message: expect.any(String) } });
-    if (restored.state.current?.type === "error") expect(restored.state.current.error.span).toBeUndefined();
-
-    const retried = advancePlayer(documentB, { ...restored.state, runtimeState: { ...restored.state.runtimeState, story: { divisor: 1 } } });
+    const retried = advancePlayer(documentB, { ...state, runtimeState: { ...state.runtimeState, story: { divisor: 1 } } });
     expect(textOf(retried)).toBe("Hi.");
   });
 

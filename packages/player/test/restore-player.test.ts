@@ -18,22 +18,14 @@ describe("restorePlayer — round trip per suspension kind, same document", () =
     expect(restored).toEqual({ ok: true, state: player });
   });
 
-  it("content", () => {
-    const { document, player } = freshPlayer("@scene s\nHi.\n");
-    const advanced = advancePlayer(document, player);
-    const restored = restorePlayer(document, snapshotPlayer(document, advanced));
-    expect(restored).toEqual({ ok: true, state: advanced });
-  });
+  const SINGLE_STEP_SOURCES: readonly { readonly name: string; readonly source: string }[] = [
+    { name: "content", source: "@scene s\nHi.\n" },
+    { name: "dialogue", source: "@scene s\n@say speaker=Alice\nHi.\n" },
+    { name: "presentation", source: "@scene s\n@background room.jpg\nHi.\n" }
+  ];
 
-  it("dialogue", () => {
-    const { document, player } = freshPlayer("@scene s\n@say speaker=Alice\nHi.\n");
-    const advanced = advancePlayer(document, player);
-    const restored = restorePlayer(document, snapshotPlayer(document, advanced));
-    expect(restored).toEqual({ ok: true, state: advanced });
-  });
-
-  it("presentation", () => {
-    const { document, player } = freshPlayer("@scene s\n@background room.jpg\nHi.\n");
+  it.each(SINGLE_STEP_SOURCES)("$name", ({ source }) => {
+    const { document, player } = freshPlayer(source);
     const advanced = advancePlayer(document, player);
     const restored = restorePlayer(document, snapshotPlayer(document, advanced));
     expect(restored).toEqual({ ok: true, state: advanced });
@@ -211,48 +203,50 @@ describe("restorePlayer — Choice DP validation (docs/CORE_SPEC.md Section 33.8
     expect(restorePlayer(document, snapshot).ok).toBe(true);
   });
 
-  it("ACCEPTS a duplicate conditioned item followed by an unconditional duplicate, persisted as the single occurrence (the DP-vs-greedy proof)", () => {
-    // authored: 1. "Go"->"x" (conditioned, false -> filtered out live)
-    //           2. "Go"->"x" (unconditional -> always present)
-    // A greedy left-to-right matcher would consume persisted[0] against
-    // authored item #1 and then wrongly report mandatory item #2 missing.
-    const source = [
-      "---",
-      "state:",
-      "  show_first: false",
-      "---",
-      "@scene s",
-      "@choice",
-      "- Go -> x if show_first",
-      "- Go -> x",
-      "@end",
-      "@scene x",
-      "X."
-    ].join("\n");
-    const { document, snapshot } = choiceState(source);
-    expect(snapshot.current).toEqual({ type: "choice", items: [{ text: "Go", target: "x" }] });
-    expect(restorePlayer(document, snapshot).ok).toBe(true);
-  });
+  const DUPLICATE_ACCEPT_CASES: readonly { readonly name: string; readonly source: string }[] = [
+    {
+      // authored: 1. "Go"->"x" (conditioned, false -> filtered out live)
+      //           2. "Go"->"x" (unconditional -> always present)
+      // A greedy left-to-right matcher would consume persisted[0] against
+      // authored item #1 and then wrongly report mandatory item #2 missing.
+      name: "a duplicate conditioned item followed by an unconditional duplicate (the DP-vs-greedy proof)",
+      source: [
+        "---",
+        "state:",
+        "  show_first: false",
+        "---",
+        "@scene s",
+        "@choice",
+        "- Go -> x if show_first",
+        "- Go -> x",
+        "@end",
+        "@scene x",
+        "X."
+      ].join("\n")
+    },
+    {
+      // authored: 1. "Go"->"x" (unconditional -> must always be present)
+      //           2. "Go"->"x" (conditioned, false -> filtered out live)
+      // persisted [X] still satisfies item #1; item #2 is legitimately
+      // absent -- the other duplicate ordering of the same proof.
+      name: "a duplicate unconditional item followed by a conditioned duplicate, since the conditioned one is legitimately absent",
+      source: [
+        "---",
+        "state:",
+        "  show_second: false",
+        "---",
+        "@scene s",
+        "@choice",
+        "- Go -> x",
+        "- Go -> x if show_second",
+        "@end",
+        "@scene x",
+        "X."
+      ].join("\n")
+    }
+  ];
 
-  it("ACCEPTS a duplicate unconditional item followed by a conditioned duplicate, persisted once, since the conditioned one is legitimately absent", () => {
-    // authored: 1. "Go"->"x" (unconditional -> must always be present)
-    //           2. "Go"->"x" (conditioned, false -> filtered out live)
-    // persisted [X] must still be accepted (it satisfies item #1; item #2
-    // is legitimately absent) -- this is the ACCEPT half of the duplicate
-    // pair; the next case proves the REJECT half.
-    const source = [
-      "---",
-      "state:",
-      "  show_second: false",
-      "---",
-      "@scene s",
-      "@choice",
-      "- Go -> x",
-      "- Go -> x if show_second",
-      "@end",
-      "@scene x",
-      "X."
-    ].join("\n");
+  it.each(DUPLICATE_ACCEPT_CASES)("ACCEPTS $name, persisted as the single occurrence", ({ source }) => {
     const { document, snapshot } = choiceState(source);
     expect(snapshot.current).toEqual({ type: "choice", items: [{ text: "Go", target: "x" }] });
     expect(restorePlayer(document, snapshot).ok).toBe(true);

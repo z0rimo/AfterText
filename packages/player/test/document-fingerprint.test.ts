@@ -62,78 +62,70 @@ describe("document fingerprint — mutation", () => {
     expect(computeDocumentFingerprint(differentEntry)).not.toBe(computeDocumentFingerprint(base));
   });
 
-  it("changes when an initialState value changes", () => {
-    expectDifferentFingerprint(
-      ["---", "state:", "  a: 1", "---", "@scene s", "Hi."].join("\n"),
-      ["---", "state:", "  a: 2", "---", "@scene s", "Hi."].join("\n")
-    );
-  });
+  const MUTATION_CASES: readonly { readonly name: string; readonly a: string; readonly b: string }[] = [
+    {
+      name: "an initialState value",
+      a: ["---", "state:", "  a: 1", "---", "@scene s", "Hi."].join("\n"),
+      b: ["---", "state:", "  a: 2", "---", "@scene s", "Hi."].join("\n")
+    },
+    {
+      name: "scene order",
+      a: ["@scene s", "Hi.", "", "@scene t", "Bye."].join("\n"),
+      b: ["@scene t", "Bye.", "", "@scene s", "Hi."].join("\n")
+    },
+    {
+      name: "block order",
+      a: ["@scene s", "First.", "", "Second."].join("\n"),
+      b: ["@scene s", "Second.", "", "First."].join("\n")
+    },
+    {
+      name: "Dialogue text",
+      a: "@scene s\n@say speaker=Alice\nHello.\n",
+      b: "@scene s\n@say speaker=Alice\nGoodbye.\n"
+    },
+    {
+      name: "a Choice target",
+      a: ["@scene s", "@choice", "- Go -> a", "@end", "@scene a", "A.", "@scene b", "B."].join("\n"),
+      b: ["@scene s", "@choice", "- Go -> b", "@end", "@scene a", "A.", "@scene b", "B."].join("\n")
+    },
+    {
+      name: "a @set expression",
+      a: ["@scene s", "@set a = 1", "Hi."].join("\n"),
+      b: ["@scene s", "@set a = 2", "Hi."].join("\n")
+    },
+    {
+      name: "a Presentation authored value",
+      a: ["@scene s", "@background room.jpg", "Hi."].join("\n"),
+      b: ["@scene s", "@background hall.jpg", "Hi."].join("\n")
+    },
+    {
+      name: "a Conditional condition",
+      a: ["@scene s", "@set a = 1", "@if a == 1", "Hi.", "@end"].join("\n"),
+      b: ["@scene s", "@set a = 1", "@if a == 2", "Hi.", "@end"].join("\n")
+    },
+    {
+      name: "Conditional branch order",
+      a: ["@scene s", "@set a = 1", "@if a == 1", "One.", "@elseif a == 2", "Two.", "@end"].join("\n"),
+      b: ["@scene s", "@set a = 1", "@if a == 2", "Two.", "@elseif a == 1", "One.", "@end"].join("\n")
+    },
+    {
+      name: "a Variant id",
+      a: ["@scene s", "@variant mood", "@when true", "Hi.", "@end"].join("\n"),
+      b: ["@scene s", "@variant tone", "@when true", "Hi.", "@end"].join("\n")
+    },
+    {
+      name: "Variant branch order",
+      a: ["@scene s", "@variant mood", "@when true", "Happy.", "@when false", "Sad.", "@end"].join("\n"),
+      b: ["@scene s", "@variant mood", "@when false", "Sad.", "@when true", "Happy.", "@end"].join("\n")
+    },
+    {
+      name: "a Goto target",
+      a: ["@scene s", "@goto a", "@scene a", "A.", "@scene b", "B."].join("\n"),
+      b: ["@scene s", "@goto b", "@scene a", "A.", "@scene b", "B."].join("\n")
+    }
+  ];
 
-  it("changes when scene order changes", () => {
-    expectDifferentFingerprint(
-      ["@scene s", "Hi.", "", "@scene t", "Bye."].join("\n"),
-      ["@scene t", "Bye.", "", "@scene s", "Hi."].join("\n")
-    );
-  });
-
-  it("changes when block order changes", () => {
-    expectDifferentFingerprint(["@scene s", "First.", "", "Second."].join("\n"), ["@scene s", "Second.", "", "First."].join("\n"));
-  });
-
-  it("changes when Dialogue text changes", () => {
-    expectDifferentFingerprint(
-      "@scene s\n@say speaker=Alice\nHello.\n",
-      "@scene s\n@say speaker=Alice\nGoodbye.\n"
-    );
-  });
-
-  it("changes when a Choice target changes", () => {
-    expectDifferentFingerprint(
-      ["@scene s", "@choice", "- Go -> a", "@end", "@scene a", "A.", "@scene b", "B."].join("\n"),
-      ["@scene s", "@choice", "- Go -> b", "@end", "@scene a", "A.", "@scene b", "B."].join("\n")
-    );
-  });
-
-  it("changes when a @set expression changes", () => {
-    expectDifferentFingerprint(["@scene s", "@set a = 1", "Hi."].join("\n"), ["@scene s", "@set a = 2", "Hi."].join("\n"));
-  });
-
-  it("changes when a Presentation authored value changes", () => {
-    expectDifferentFingerprint(["@scene s", "@background room.jpg", "Hi."].join("\n"), ["@scene s", "@background hall.jpg", "Hi."].join("\n"));
-  });
-
-  it("changes when a Conditional condition changes", () => {
-    expectDifferentFingerprint(
-      ["@scene s", "@set a = 1", "@if a == 1", "Hi.", "@end"].join("\n"),
-      ["@scene s", "@set a = 1", "@if a == 2", "Hi.", "@end"].join("\n")
-    );
-  });
-
-  it("changes when Conditional branch order changes", () => {
-    expectDifferentFingerprint(
-      ["@scene s", "@set a = 1", "@if a == 1", "One.", "@elseif a == 2", "Two.", "@end"].join("\n"),
-      ["@scene s", "@set a = 1", "@if a == 2", "Two.", "@elseif a == 1", "One.", "@end"].join("\n")
-    );
-  });
-
-  it("changes when a Variant id changes", () => {
-    expectDifferentFingerprint(
-      ["@scene s", "@variant mood", "@when true", "Hi.", "@end"].join("\n"),
-      ["@scene s", "@variant tone", "@when true", "Hi.", "@end"].join("\n")
-    );
-  });
-
-  it("changes when Variant branch order changes", () => {
-    expectDifferentFingerprint(
-      ["@scene s", "@variant mood", "@when true", "Happy.", "@when false", "Sad.", "@end"].join("\n"),
-      ["@scene s", "@variant mood", "@when false", "Sad.", "@when true", "Happy.", "@end"].join("\n")
-    );
-  });
-
-  it("changes when a Goto target changes", () => {
-    expectDifferentFingerprint(
-      ["@scene s", "@goto a", "@scene a", "A.", "@scene b", "B."].join("\n"),
-      ["@scene s", "@goto b", "@scene a", "A.", "@scene b", "B."].join("\n")
-    );
+  it.each(MUTATION_CASES)("changes when $name changes", ({ a, b }) => {
+    expectDifferentFingerprint(a, b);
   });
 });
