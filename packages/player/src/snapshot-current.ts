@@ -1,6 +1,6 @@
 import type { ExecutionResult, RuntimeExecutionErrorKind } from "@aftertext/runtime";
 import type { JsonValue } from "./snapshot-types.js";
-import { isPlainRecord } from "./snapshot-types.js";
+import { boundedArrayLength, isPlainRecord } from "./snapshot-types.js";
 
 /**
  * Private, opaque current-result descriptor (docs/CORE_SPEC.md Section
@@ -72,15 +72,21 @@ export function encodeCurrent(current: ExecutionResult | null): JsonValue {
 }
 
 /**
- * Reads `value` by index up to its own captured `.length` rather than
- * with `for...of`: a `for...of` loop consults `Symbol.iterator`, so a
- * caller-supplied array Proxy with a short, `isJsonValue`-validated
+ * Reads `value` by index up to its own freshly-captured, re-bounded
+ * `.length` rather than with `for...of`: a `for...of` loop consults
+ * `Symbol.iterator`, so a caller-supplied array Proxy with a short
  * `.length` but a custom iterator that yields indefinitely would
- * otherwise loop forever here — indexed access never invokes it.
+ * otherwise loop forever here — indexed access never invokes it. The
+ * length is re-bounded via `boundedArrayLength` here too, independent
+ * of whatever `isJsonValue`'s own earlier pass over this same value
+ * saw: a live Proxy can answer a `.length` read differently each time
+ * it is asked, so this function's own read must stand on its own
+ * rather than trust an earlier pass's result for the same property.
  */
 function decodeChoiceItems(value: unknown): readonly { readonly text: string; readonly target: string }[] | undefined {
   if (!Array.isArray(value)) return undefined;
-  const length = value.length;
+  const length = boundedArrayLength(value);
+  if (length === undefined) return undefined;
   const items: { text: string; target: string }[] = [];
   for (let i = 0; i < length; i++) {
     const raw = value[i];

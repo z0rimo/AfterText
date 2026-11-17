@@ -104,6 +104,22 @@ function hasOrdinaryRecordPrototype(value: object): boolean {
 const MAX_JSON_VALUE_DEPTH = 64;
 const MAX_JSON_ARRAY_LENGTH = 1_000_000;
 
+/**
+ * Captures `value.length` exactly once and returns it only if within
+ * `MAX_JSON_ARRAY_LENGTH`, or `undefined` otherwise — the one place
+ * this package reads an untrusted array's `.length`. Checking the
+ * length and then separately calling a built-in like `.every()` is not
+ * equivalent: `.every()` performs its own internal `Get(array,
+ * "length")`, a second read a live Proxy can answer differently from
+ * the first (small enough to pass this check, then enormous), so every
+ * caller here iterates by index up to the value this function returns
+ * instead of ever calling `.every()`/`for...of` on the array itself.
+ */
+export function boundedArrayLength(value: readonly unknown[]): number | undefined {
+  const length = value.length;
+  return length <= MAX_JSON_ARRAY_LENGTH ? length : undefined;
+}
+
 function isJsonValueAtDepth(value: unknown, depth: number, memo: Map<object, boolean>): value is JsonValue {
   if (value === null || typeof value === "string" || typeof value === "boolean") return true;
   if (typeof value === "number") return Number.isFinite(value);
@@ -112,10 +128,19 @@ function isJsonValueAtDepth(value: unknown, depth: number, memo: Map<object, boo
   if (cached !== undefined) return cached;
   if (depth >= MAX_JSON_VALUE_DEPTH) return false;
   const result = Array.isArray(value)
-    ? value.length <= MAX_JSON_ARRAY_LENGTH && value.every((item) => isJsonValueAtDepth(item, depth + 1, memo))
+    ? isJsonArrayAtDepth(value, depth, memo)
     : hasOrdinaryRecordPrototype(value) && Object.values(value).every((item) => isJsonValueAtDepth(item, depth + 1, memo));
   memo.set(value, result);
   return result;
+}
+
+function isJsonArrayAtDepth(value: readonly unknown[], depth: number, memo: Map<object, boolean>): boolean {
+  const length = boundedArrayLength(value);
+  if (length === undefined) return false;
+  for (let i = 0; i < length; i++) {
+    if (!isJsonValueAtDepth(value[i], depth + 1, memo)) return false;
+  }
+  return true;
 }
 
 /**

@@ -616,3 +616,44 @@ describe("large but legitimately authored choices round-trip (Codex-reported P2,
     if (restored.ok) expect(restored.state.current).toMatchObject({ type: "choice" });
   });
 });
+
+describe("single-read, independently re-bound array lengths (Codex-reported P2, docs/CORE_SPEC.md Section 33.8)", () => {
+  const { document, snapshot } = freshSnapshot();
+
+  it("isJsonValue reads an array's .length exactly once, never trusting a separate internal .every() read", () => {
+    let lengthReads = 0;
+    const real = ["a", "b", "c"];
+    const hostile = new Proxy(real, {
+      get(target, prop, receiver) {
+        if (prop === "length") {
+          lengthReads++;
+          return lengthReads === 1 ? 3 : 0xffffffff;
+        }
+        return Reflect.get(target, prop, receiver);
+      }
+    });
+    const tampered = { ...snapshot, position: hostile };
+    expect(() => restorePlayer(document, tampered)).not.toThrow();
+    lengthReads = 0;
+    restorePlayer(document, tampered);
+    expect(lengthReads).toBe(1);
+  });
+
+  it("decodeChoiceItems re-bounds its own .length read, independent of what isJsonValue's earlier pass saw", () => {
+    let lengthReads = 0;
+    const real = [{ text: "Go", target: "a" }];
+    const hostile = new Proxy(real, {
+      get(target, prop, receiver) {
+        if (prop === "length") {
+          lengthReads++;
+          return lengthReads === 1 ? 1 : 0xffffffff;
+        }
+        return Reflect.get(target, prop, receiver);
+      }
+    });
+    const tampered = { ...snapshot, current: { type: "choice", items: hostile } };
+    expect(() => restorePlayer(document, tampered)).not.toThrow();
+    const result = restorePlayer(document, tampered);
+    expect(result).toEqual({ ok: false, error: { kind: "malformedSnapshot", reason: expect.any(String) } });
+  });
+});
