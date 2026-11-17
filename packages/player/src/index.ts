@@ -29,3 +29,15 @@ export type {
   RuntimeExecutionErrorKind,
   RuntimeExecutionError
 } from "@aftertext/runtime";
+
+// Save/Restore (docs/CORE_SPEC.md Section 33). Player owns the public
+// JSON-compatible snapshot/restore boundary; `JsonValue`/`PlayerSnapshot`/
+// `PlayerRestoreError`/`RestorePlayerResult` are the only new public
+// types, and `snapshotPlayer`/`restorePlayer` the only new public
+// functions — every production module's own private descriptor/
+// validation types (`SnapshotCurrent`, the document-fingerprint
+// canonical tree, `DocumentIndex`) stay internal to this package.
+
+export type { JsonValue, PlayerSnapshot, PlayerRestoreError, RestorePlayerResult } from "./snapshot-types.js";
+export { snapshotPlayer } from "./snapshot-player.js";
+export { restorePlayer } from "./restore-player.js";
