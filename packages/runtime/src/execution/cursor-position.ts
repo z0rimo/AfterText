@@ -266,22 +266,43 @@ function resolveCursor(
 
 /**
  * Validates every open frame's captured `visitRecorded`/`seenRecorded`
- * flag against the given `runtimeState` (docs/CORE_SPEC.md Section 33.4,
- * 33.8): whenever a flag is `true`, the corresponding `ReaderState` entry
- * must already exist — and for a Variant frame, that entry's own
- * `lastSeenBranchId` must equal the frame's active `branchId`. A captured
- * `false` carries no such requirement. Reads with `ownEntry` since the
- * keys being probed (`sceneId`/`variantId`) come from the untrusted
- * `position`, not from the already-typed `runtimeState` itself.
+ * flag against the given `runtimeState` and `resultKind` (docs/CORE_SPEC.md
+ * Section 33.4, 33.8).
+ *
+ * `advance()` always calls `recordObservableExposure` immediately before
+ * committing a `content`/`dialogue`/`presentation`/`choice` suspension, so
+ * every currently-open frame's flag is unconditionally `true` by the time
+ * any of those four is reached — a live position for one of them can
+ * therefore never carry a `false` flag; only `error` legitimately can
+ * (Section 33.4). A `false` flag paired with one of the other four kinds
+ * describes a suspension no live session could ever have produced, and is
+ * rejected here rather than silently accepted and later double-recorded
+ * when a retried `advance()` finds it still unmarked.
+ *
+ * Whenever a flag is (still correctly) `true`, the corresponding
+ * `ReaderState` entry must already exist — and for a Variant frame, that
+ * entry's own `lastSeenBranchId` must equal the frame's active `branchId`.
+ * Reads with `ownEntry` since the keys being probed (`sceneId`/
+ * `variantId`) come from the untrusted `position`, not from the
+ * already-typed `runtimeState` itself.
  */
-function exposureFlagsAreConsistent(cursor: ExecutionCursor, runtimeState: RuntimeState): boolean {
+function exposureFlagsAreConsistent(
+  cursor: ExecutionCursor,
+  runtimeState: RuntimeState,
+  resultKind: CursorPositionResultKind
+): boolean {
+  const mustBeRecorded = resultKind !== "error";
   for (const frame of cursor) {
-    if (frame.kind === "scene" && frame.visitRecorded) {
-      if (!ownEntry(runtimeState.reader.visitedScenes, frame.sceneId)) return false;
+    if (frame.kind === "scene") {
+      if (mustBeRecorded && !frame.visitRecorded) return false;
+      if (frame.visitRecorded && !ownEntry(runtimeState.reader.visitedScenes, frame.sceneId)) return false;
     }
-    if (frame.kind === "variant" && frame.seenRecorded) {
-      const memory = ownEntry(runtimeState.reader.seenVariants, frame.variantId);
-      if (memory?.lastSeenBranchId !== frame.branchId) return false;
+    if (frame.kind === "variant") {
+      if (mustBeRecorded && !frame.seenRecorded) return false;
+      if (frame.seenRecorded) {
+        const memory = ownEntry(runtimeState.reader.seenVariants, frame.variantId);
+        if (memory?.lastSeenBranchId !== frame.branchId) return false;
+      }
     }
   }
   return true;
@@ -330,7 +351,7 @@ export function fromCursorPosition(
   const resolved = resolveCursor(document, payload, resultKind);
   if (!resolved) return { ok: false, reason: "Cursor position does not resolve against the given document." };
 
-  if (!exposureFlagsAreConsistent(resolved.cursor, runtimeState)) {
+  if (!exposureFlagsAreConsistent(resolved.cursor, runtimeState, resultKind)) {
     return { ok: false, reason: "Captured exposure flags are inconsistent with the given runtimeState.reader." };
   }
 

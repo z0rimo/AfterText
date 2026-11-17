@@ -424,26 +424,79 @@ describe("integrity validation (docs/CORE_SPEC.md Section 33.4, 33.8)", () => {
   it("index bounds differ by resultKind: one-past-end is valid for content/dialogue/presentation/error but not choice", () => {
     const source = "@scene s\nOnly.\n";
     const documentA = compileDoc(source);
-    const state = createRuntimeState(documentA);
     const blockCount = documentA.scenes[0]!.blocks.length;
     expect(blockCount).toBe(1);
 
-    const onePastEnd: JsonValue = { sceneId: "s", frames: [{ kind: "scene", index: blockCount, visitRecorded: false }] };
-    expect(fromCursorPosition(documentA, state, onePastEnd, "content").ok).toBe(true);
-    expect(fromCursorPosition(documentA, state, onePastEnd, "dialogue").ok).toBe(true);
-    expect(fromCursorPosition(documentA, state, onePastEnd, "presentation").ok).toBe(true);
-    expect(fromCursorPosition(documentA, state, onePastEnd, "error").ok).toBe(true);
-    expect(fromCursorPosition(documentA, state, onePastEnd, "choice")).toEqual({ ok: false, reason: expect.any(String) });
+    // A genuinely live content/dialogue/presentation/choice suspension
+    // always has visitRecorded: true for every open frame (Section 33.4),
+    // which in turn requires a matching visitedScenes entry — so this
+    // fixture — proving the *bounds* rule, not the exposure-flag rule —
+    // must use a runtimeState that already has one.
+    const stateWithVisit = { ...createRuntimeState(documentA), reader: { visitedScenes: { s: { visitCount: 1 } }, seenVariants: {} } };
+    const onePastEndRecorded: JsonValue = { sceneId: "s", frames: [{ kind: "scene", index: blockCount, visitRecorded: true }] };
+    expect(fromCursorPosition(documentA, stateWithVisit, onePastEndRecorded, "content").ok).toBe(true);
+    expect(fromCursorPosition(documentA, stateWithVisit, onePastEndRecorded, "dialogue").ok).toBe(true);
+    expect(fromCursorPosition(documentA, stateWithVisit, onePastEndRecorded, "presentation").ok).toBe(true);
+    expect(fromCursorPosition(documentA, stateWithVisit, onePastEndRecorded, "error").ok).toBe(true);
+    expect(fromCursorPosition(documentA, stateWithVisit, onePastEndRecorded, "choice")).toEqual({
+      ok: false,
+      reason: expect.any(String)
+    });
 
     for (const index of [-1, blockCount + 1, 0.5]) {
-      const outOfBounds: JsonValue = { sceneId: "s", frames: [{ kind: "scene", index, visitRecorded: false }] };
+      const outOfBounds: JsonValue = { sceneId: "s", frames: [{ kind: "scene", index, visitRecorded: true }] };
       for (const resultKind of ["content", "dialogue", "presentation", "error", "choice"] as const) {
-        expect(fromCursorPosition(documentA, state, outOfBounds, resultKind)).toEqual({
+        expect(fromCursorPosition(documentA, stateWithVisit, outOfBounds, resultKind)).toEqual({
           ok: false,
           reason: expect.any(String)
         });
       }
     }
+  });
+
+  it("rejects a false exposure flag for every observable suspension kind — only error may genuinely carry one", () => {
+    const source = "@scene s\nOnly.\n";
+    const documentA = compileDoc(source);
+    const state = createRuntimeState(documentA);
+    const blockCount = documentA.scenes[0]!.blocks.length;
+
+    // Same in-bounds position, differing only in visitRecorded: false.
+    // advance() always records exposure before committing content/
+    // dialogue/presentation/choice (Section 33.4), so a live suspension of
+    // any of those four kinds can never carry a false flag — only error
+    // legitimately can (already covered by the false-exposure round-trip
+    // test above). `false` carries no ReaderState-entry requirement, so
+    // the plain fresh `state` (empty Reader Memory) is fine here.
+    const unrecorded: JsonValue = { sceneId: "s", frames: [{ kind: "scene", index: blockCount, visitRecorded: false }] };
+    expect(fromCursorPosition(documentA, state, unrecorded, "content")).toEqual({ ok: false, reason: expect.any(String) });
+    expect(fromCursorPosition(documentA, state, unrecorded, "dialogue")).toEqual({ ok: false, reason: expect.any(String) });
+    expect(fromCursorPosition(documentA, state, unrecorded, "presentation")).toEqual({
+      ok: false,
+      reason: expect.any(String)
+    });
+    expect(fromCursorPosition(documentA, state, unrecorded, "error").ok).toBe(true);
+
+    // The same rule applies to an open Variant frame's seenRecorded. The
+    // scene frame above it is marked recorded, so it needs its own
+    // matching visitedScenes entry, same as the bounds test above.
+    const variantSource = ["@scene s", "@variant mood", "@when true", "Hi.", "@end"].join("\n");
+    const documentV = compileDoc(variantSource);
+    const stateWithSceneVisited = {
+      ...createRuntimeState(documentV),
+      reader: { visitedScenes: { s: { visitCount: 1 } }, seenVariants: {} }
+    };
+    const unrecordedVariant: JsonValue = {
+      sceneId: "s",
+      frames: [
+        { kind: "scene", index: 0, visitRecorded: true },
+        { kind: "variant", variantId: "mood", branchId: "mood:0", index: 1, seenRecorded: false }
+      ]
+    };
+    expect(fromCursorPosition(documentV, stateWithSceneVisited, unrecordedVariant, "content")).toEqual({
+      ok: false,
+      reason: expect.any(String)
+    });
+    expect(fromCursorPosition(documentV, stateWithSceneVisited, unrecordedVariant, "error").ok).toBe(true);
   });
 
   it("exposure-flag consistency: a true flag without a matching ReaderState entry is rejected", () => {
