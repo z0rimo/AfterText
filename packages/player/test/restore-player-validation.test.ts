@@ -359,3 +359,45 @@ describe("recursive/cyclic JSON graph safety (Codex-reported P2, docs/CORE_SPEC.
     });
   });
 });
+
+describe("untrusted snapshot accessor safety (Codex-reported P2, docs/CORE_SPEC.md Section 33.8)", () => {
+  const { document } = freshSnapshot();
+
+  it("rejects a plain object with a throwing getter for formatVersion without propagating the exception", () => {
+    const throwing: Record<string, unknown> = {};
+    Object.defineProperty(throwing, "formatVersion", {
+      get() {
+        throw new Error("boom");
+      },
+      enumerable: true
+    });
+    expect(() => restorePlayer(document, throwing)).not.toThrow();
+    expect(restorePlayer(document, throwing)).toEqual({ ok: false, error: { kind: "malformedSnapshot", reason: expect.any(String) } });
+  });
+
+  it("rejects a Proxy whose getPrototypeOf trap throws without propagating the exception", () => {
+    const proxy = new Proxy(
+      {},
+      {
+        getPrototypeOf() {
+          throw new Error("boom");
+        }
+      }
+    );
+    expect(() => restorePlayer(document, proxy)).not.toThrow();
+    expect(restorePlayer(document, proxy)).toEqual({ ok: false, error: { kind: "malformedSnapshot", reason: expect.any(String) } });
+  });
+
+  it("rejects a Proxy whose get trap throws without propagating the exception", () => {
+    const proxy = new Proxy(
+      {},
+      {
+        get() {
+          throw new Error("boom");
+        }
+      }
+    );
+    expect(() => restorePlayer(document, proxy)).not.toThrow();
+    expect(restorePlayer(document, proxy)).toEqual({ ok: false, error: { kind: "malformedSnapshot", reason: expect.any(String) } });
+  });
+});

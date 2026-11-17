@@ -23,7 +23,15 @@ function restored(state: PlayerState): RestorePlayerResult {
  * `PlayerSnapshot`-shaped value (docs/CORE_SPEC.md Section 33.8).
  * `snapshot` is untrusted `unknown` data — every field is validated
  * before any live state is constructed, and this function never throws
- * for ordinary malformed input.
+ * for ordinary malformed input, including input designed to throw while
+ * merely being *inspected*: a plain object with a throwing getter on
+ * `formatVersion`/etc., or a `Proxy` whose `get`/`getPrototypeOf` trap
+ * throws, would otherwise propagate an exception out of this public
+ * boundary the first time a validator reads one of its properties. The
+ * single `try`/`catch` here — around the entire validation pipeline,
+ * not scattered per call site — is the one place that guarantee needs
+ * enforcing, since every validator below already assumes ordinary
+ * property access never throws.
  *
  * Validation proceeds in the merged spec's own locked numbered order:
  * top-level shape -> formatVersion -> documentFingerprint -> runtimeState
@@ -35,6 +43,14 @@ function restored(state: PlayerState): RestorePlayerResult {
  * `malformedSnapshot` (Section 33.8's own step 6 vs. step 7 boundary).
  */
 export function restorePlayer(document: StoryDocument, snapshot: unknown): RestorePlayerResult {
+  try {
+    return restorePlayerUnchecked(document, snapshot);
+  } catch (error) {
+    return malformed(`snapshot could not be inspected: ${error instanceof Error ? error.message : String(error)}`);
+  }
+}
+
+function restorePlayerUnchecked(document: StoryDocument, snapshot: unknown): RestorePlayerResult {
   if (!isPlainRecord(snapshot)) return malformed("snapshot is not a plain object.");
 
   if (snapshot.formatVersion !== 1) {
