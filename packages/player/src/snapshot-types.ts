@@ -68,17 +68,33 @@ function hasOrdinaryRecordPrototype(value: object): boolean {
  * promises for every malformed input (never a thrown exception). No
  * legitimate `position`/`current` payload this package ever produces
  * nests anywhere near this deep, so the cap costs nothing for real data.
+ *
+ * The depth cap alone does not bound total *work*: a value can be a DAG
+ * rather than a tree (the same child object referenced by many parents,
+ * e.g. repeatedly wrapping one shared child as `[child, child]`), which
+ * stays within the depth cap while the naive walk below re-validates that
+ * shared subtree once per path to it — exponential in the number of
+ * wrapping levels. `memo` records each object's already-computed result
+ * (only once fully resolved, never for a call cut short by the depth
+ * cap, so a node later reached again via a shallower path is still
+ * evaluated correctly on its own terms) so a shared reference is walked
+ * at most once, bounding total work by the number of distinct objects in
+ * the graph rather than the number of paths to them.
  */
 const MAX_JSON_VALUE_DEPTH = 64;
 
-function isJsonValueAtDepth(value: unknown, depth: number): value is JsonValue {
+function isJsonValueAtDepth(value: unknown, depth: number, memo: Map<object, boolean>): value is JsonValue {
   if (value === null || typeof value === "string" || typeof value === "boolean") return true;
   if (typeof value === "number") return Number.isFinite(value);
-  if (depth >= MAX_JSON_VALUE_DEPTH) return false;
-  if (Array.isArray(value)) return value.every((item) => isJsonValueAtDepth(item, depth + 1));
   if (typeof value !== "object") return false;
-  if (!hasOrdinaryRecordPrototype(value)) return false;
-  return Object.values(value).every((item) => isJsonValueAtDepth(item, depth + 1));
+  const cached = memo.get(value);
+  if (cached !== undefined) return cached;
+  if (depth >= MAX_JSON_VALUE_DEPTH) return false;
+  const result = Array.isArray(value)
+    ? value.every((item) => isJsonValueAtDepth(item, depth + 1, memo))
+    : hasOrdinaryRecordPrototype(value) && Object.values(value).every((item) => isJsonValueAtDepth(item, depth + 1, memo));
+  memo.set(value, result);
+  return result;
 }
 
 /**
@@ -88,12 +104,12 @@ function isJsonValueAtDepth(value: unknown, depth: number): value is JsonValue {
  * Rejects `undefined`, `NaN`/`Infinity`/`-Infinity`, `bigint`, `symbol`,
  * functions, and any object whose prototype is not `Object.prototype` or
  * `null` (so a `Date`/`Map`/`Set`/class instance is never mistaken for a
- * JSON record merely because it has enumerable fields). Never throws,
- * even on a cyclic or pathologically deep input — see
- * `MAX_JSON_VALUE_DEPTH`.
+ * JSON record merely because it has enumerable fields). Never throws and
+ * never does exponential work, even on a cyclic, pathologically deep, or
+ * heavily-shared (DAG-shaped) input — see `MAX_JSON_VALUE_DEPTH`.
  */
 export function isJsonValue(value: unknown): value is JsonValue {
-  return isJsonValueAtDepth(value, 0);
+  return isJsonValueAtDepth(value, 0, new Map());
 }
 
 /** Whether `value` is a plain, untrusted-input-safe record — the `unknown`-input counterpart of `isJsonValue`'s own record check. */

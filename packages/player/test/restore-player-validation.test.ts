@@ -527,3 +527,16 @@ describe("read-once safety for validated untrusted fields (Codex-reported P2, do
     expect(currentReads).toBe(1);
   });
 });
+
+describe("bounded total work for shared (DAG-shaped) JSON graphs (Codex-reported P2, docs/CORE_SPEC.md Section 33.8)", () => {
+  const { document, snapshot } = freshSnapshot();
+
+  it("validates a deeply shared (but shallow) JSON graph quickly instead of doing exponential work", () => {
+    let shared: unknown = "leaf";
+    for (let i = 0; i < 40; i++) shared = [shared, shared];
+    const start = performance.now();
+    expect(() => restorePlayer(document, { ...snapshot, position: shared })).not.toThrow();
+    const elapsedMs = performance.now() - start;
+    expect(elapsedMs).toBeLessThan(2000);
+  });
+});
