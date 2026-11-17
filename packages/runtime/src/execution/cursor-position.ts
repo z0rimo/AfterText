@@ -89,14 +89,17 @@ function isPlainRecord(value: JsonValue): value is { readonly [key: string]: Jso
 }
 
 /**
- * No legitimate structural cursor ever nests anywhere near this deep
- * (it mirrors the authored document's own Scene/Conditional/Variant
- * nesting). Caps `rawFrames.length` so a caller-supplied array claiming
- * an astronomical length (cheap to construct when sparse, e.g.
+ * Caps `rawFrames.length` so a caller-supplied array claiming an
+ * astronomical length (cheap to construct when sparse, e.g.
  * `new Array(0xffffffff)`) cannot force an equally astronomical number
- * of index reads below.
+ * of index reads below — chosen purely to bound that synchronous cost,
+ * not to approximate "how deep a structural cursor could reasonably
+ * nest": the parser imposes no explicit nesting-depth limit of its own,
+ * so a cap much lower than this could reject a `toCursorPosition`/
+ * `fromCursorPosition` round trip for a legitimately (if unusually
+ * deeply) nested document.
  */
-const MAX_FRAMES_LENGTH = 10_000;
+const MAX_FRAMES_LENGTH = 1_000_000;
 
 /**
  * Runtime-level parse of the untrusted opaque payload's top-level and

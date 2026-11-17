@@ -600,3 +600,19 @@ describe("choice-items decode/validation safety (Codex-reported P2, docs/CORE_SP
     expect(elapsedMs).toBeLessThan(2000);
   });
 });
+
+describe("large but legitimately authored choices round-trip (Codex-reported P2, docs/CORE_SPEC.md Section 33.8)", () => {
+  it("snapshots and restores a Choice with more items than the compiler's (nonexistent) item-count limit would ever matter for", () => {
+    const itemCount = 15_000;
+    const choiceLines = Array.from({ length: itemCount }, (_, i) => `- Option ${i} -> a`);
+    const source = ["@scene s", "@choice", ...choiceLines, "@end", "@scene a", "A."].join("\n");
+    const document = compileDoc(source);
+    const player = createPlayer(document);
+    const advanced = advancePlayer(document, player);
+    const snapshot = snapshotPlayer(document, advanced);
+    expect(snapshot.current).toMatchObject({ type: "choice" });
+    const restored = restorePlayer(document, snapshot);
+    expect(restored.ok).toBe(true);
+    if (restored.ok) expect(restored.state.current).toMatchObject({ type: "choice" });
+  });
+});

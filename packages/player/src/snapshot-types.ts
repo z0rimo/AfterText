@@ -89,12 +89,20 @@ function hasOrdinaryRecordPrototype(value: object): boolean {
  * `restorePlayer` before the depth cap or memo ever come into play
  * (both only limit work *below* a node, not the cost of scanning the
  * node itself). `MAX_JSON_ARRAY_LENGTH` rejects any array claiming to be
- * larger than any real `position`/`current` payload could ever need —
- * the longest legitimate case is a Choice's offered items, always a
- * tiny, bounded, authored list.
+ * larger than this — chosen purely to stop a sparse-array length lie
+ * from costing a meaningful amount of synchronous time (still a few
+ * milliseconds of `.every()` even at this size), never to approximate
+ * "how many Choice items a document could reasonably have": the
+ * compiler's own `parseChoice` imposes no item-count limit at all, so
+ * any cap here lower than this would reject a `snapshotPlayer`/
+ * `restorePlayer` round trip for a legitimately authored (if unusually
+ * large) Choice. A real, attacker-independent Choice this large would
+ * still be handled correctly — `choiceItemsAreValidSubsequence`'s own
+ * early reject bounds its DP table by the *authored* list's length,
+ * which this constant does not touch.
  */
 const MAX_JSON_VALUE_DEPTH = 64;
-const MAX_JSON_ARRAY_LENGTH = 10_000;
+const MAX_JSON_ARRAY_LENGTH = 1_000_000;
 
 function isJsonValueAtDepth(value: unknown, depth: number, memo: Map<object, boolean>): value is JsonValue {
   if (value === null || typeof value === "string" || typeof value === "boolean") return true;
