@@ -265,6 +265,39 @@ function resolveCursor(
 }
 
 /**
+ * Validates one scene frame's `visitRecorded` flag (docs/CORE_SPEC.md
+ * Section 33.4, 33.8): `mustBeRecorded` rejects a `false` flag outright
+ * (true for every observable `resultKind` but `error` — see
+ * `exposureFlagsAreConsistent`); a `true` flag additionally requires a
+ * matching, own-property `visitedScenes` entry.
+ */
+function sceneExposureIsConsistent(
+  frame: Extract<CursorFrame, { readonly kind: "scene" }>,
+  runtimeState: RuntimeState,
+  mustBeRecorded: boolean
+): boolean {
+  if (mustBeRecorded && !frame.visitRecorded) return false;
+  return !frame.visitRecorded || ownEntry(runtimeState.reader.visitedScenes, frame.sceneId) !== undefined;
+}
+
+/**
+ * Validates one Variant frame's `seenRecorded` flag, identically to
+ * `sceneExposureIsConsistent` above but against `seenVariants` — a `true`
+ * flag additionally requires that entry's own `lastSeenBranchId` to equal
+ * the frame's active `branchId` (Section 33.4, 33.8).
+ */
+function variantExposureIsConsistent(
+  frame: Extract<CursorFrame, { readonly kind: "variant" }>,
+  runtimeState: RuntimeState,
+  mustBeRecorded: boolean
+): boolean {
+  if (mustBeRecorded && !frame.seenRecorded) return false;
+  if (!frame.seenRecorded) return true;
+  const memory = ownEntry(runtimeState.reader.seenVariants, frame.variantId);
+  return memory?.lastSeenBranchId === frame.branchId;
+}
+
+/**
  * Validates every open frame's captured `visitRecorded`/`seenRecorded`
  * flag against the given `runtimeState` and `resultKind` (docs/CORE_SPEC.md
  * Section 33.4, 33.8).
@@ -276,15 +309,9 @@ function resolveCursor(
  * therefore never carry a `false` flag; only `error` legitimately can
  * (Section 33.4). A `false` flag paired with one of the other four kinds
  * describes a suspension no live session could ever have produced, and is
- * rejected here rather than silently accepted and later double-recorded
- * when a retried `advance()` finds it still unmarked.
- *
- * Whenever a flag is (still correctly) `true`, the corresponding
- * `ReaderState` entry must already exist — and for a Variant frame, that
- * entry's own `lastSeenBranchId` must equal the frame's active `branchId`.
- * Reads with `ownEntry` since the keys being probed (`sceneId`/
- * `variantId`) come from the untrusted `position`, not from the
- * already-typed `runtimeState` itself.
+ * rejected here (via `mustBeRecorded`) rather than silently accepted and
+ * later double-recorded when a retried `advance()` finds it still
+ * unmarked.
  */
 function exposureFlagsAreConsistent(
   cursor: ExecutionCursor,
@@ -293,17 +320,8 @@ function exposureFlagsAreConsistent(
 ): boolean {
   const mustBeRecorded = resultKind !== "error";
   for (const frame of cursor) {
-    if (frame.kind === "scene") {
-      if (mustBeRecorded && !frame.visitRecorded) return false;
-      if (frame.visitRecorded && !ownEntry(runtimeState.reader.visitedScenes, frame.sceneId)) return false;
-    }
-    if (frame.kind === "variant") {
-      if (mustBeRecorded && !frame.seenRecorded) return false;
-      if (frame.seenRecorded) {
-        const memory = ownEntry(runtimeState.reader.seenVariants, frame.variantId);
-        if (memory?.lastSeenBranchId !== frame.branchId) return false;
-      }
-    }
+    if (frame.kind === "scene" && !sceneExposureIsConsistent(frame, runtimeState, mustBeRecorded)) return false;
+    if (frame.kind === "variant" && !variantExposureIsConsistent(frame, runtimeState, mustBeRecorded)) return false;
   }
   return true;
 }
