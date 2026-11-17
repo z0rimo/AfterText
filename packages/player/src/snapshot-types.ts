@@ -57,21 +57,43 @@ function hasOrdinaryRecordPrototype(value: object): boolean {
 }
 
 /**
+ * Caps how deeply `isJsonValue` will recurse into nested arrays/records
+ * (docs/CORE_SPEC.md Section 33.8): `restorePlayer`'s `snapshot` parameter
+ * is `unknown`, not merely "whatever `JSON.parse` can produce" — a caller
+ * may hand it any JS value, including a self-referential object a real
+ * JSON document could never express. Without a depth cap, validating such
+ * a value (or an extremely deeply nested but acyclic one) recurses once
+ * per level and eventually throws `RangeError: Maximum call stack size
+ * exceeded` instead of returning the `{ok:false}` this public boundary
+ * promises for every malformed input (never a thrown exception). No
+ * legitimate `position`/`current` payload this package ever produces
+ * nests anywhere near this deep, so the cap costs nothing for real data.
+ */
+const MAX_JSON_VALUE_DEPTH = 64;
+
+function isJsonValueAtDepth(value: unknown, depth: number): value is JsonValue {
+  if (value === null || typeof value === "string" || typeof value === "boolean") return true;
+  if (typeof value === "number") return Number.isFinite(value);
+  if (depth >= MAX_JSON_VALUE_DEPTH) return false;
+  if (Array.isArray(value)) return value.every((item) => isJsonValueAtDepth(item, depth + 1));
+  if (typeof value !== "object") return false;
+  if (!hasOrdinaryRecordPrototype(value)) return false;
+  return Object.values(value).every((item) => isJsonValueAtDepth(item, depth + 1));
+}
+
+/**
  * Validates that `value` is entirely JSON-compatible (docs/CORE_SPEC.md
  * Section 33.6, 33.8): only `null`, `string`, `boolean`, a finite number,
  * an array of valid `JsonValue`s, or a plain record of valid `JsonValue`s.
  * Rejects `undefined`, `NaN`/`Infinity`/`-Infinity`, `bigint`, `symbol`,
  * functions, and any object whose prototype is not `Object.prototype` or
  * `null` (so a `Date`/`Map`/`Set`/class instance is never mistaken for a
- * JSON record merely because it has enumerable fields).
+ * JSON record merely because it has enumerable fields). Never throws,
+ * even on a cyclic or pathologically deep input — see
+ * `MAX_JSON_VALUE_DEPTH`.
  */
 export function isJsonValue(value: unknown): value is JsonValue {
-  if (value === null || typeof value === "string" || typeof value === "boolean") return true;
-  if (typeof value === "number") return Number.isFinite(value);
-  if (Array.isArray(value)) return value.every(isJsonValue);
-  if (typeof value !== "object") return false;
-  if (!hasOrdinaryRecordPrototype(value)) return false;
-  return Object.values(value).every(isJsonValue);
+  return isJsonValueAtDepth(value, 0);
 }
 
 /** Whether `value` is a plain, untrusted-input-safe record — the `unknown`-input counterpart of `isJsonValue`'s own record check. */

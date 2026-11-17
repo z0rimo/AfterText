@@ -325,3 +325,37 @@ describe("navigation tests", () => {
     if (restored.ok) expect(restored.state.cursor).toEqual([]);
   });
 });
+
+describe("recursive/cyclic JSON graph safety (Codex-reported P2, docs/CORE_SPEC.md Section 33.8)", () => {
+  const { document, snapshot } = freshSnapshot();
+
+  it("rejects a self-referential (cyclic) object in position without throwing", () => {
+    const cyclic: Record<string, unknown> = {};
+    cyclic.self = cyclic;
+    expect(() => restorePlayer(document, { ...snapshot, position: cyclic })).not.toThrow();
+    expect(restorePlayer(document, { ...snapshot, position: cyclic })).toEqual({
+      ok: false,
+      error: { kind: "malformedSnapshot", reason: expect.any(String) }
+    });
+  });
+
+  it("rejects a self-referential (cyclic) array in current without throwing", () => {
+    const cyclic: unknown[] = [];
+    cyclic.push(cyclic);
+    expect(() => restorePlayer(document, { ...snapshot, current: cyclic })).not.toThrow();
+    expect(restorePlayer(document, { ...snapshot, current: cyclic })).toEqual({
+      ok: false,
+      error: { kind: "malformedSnapshot", reason: expect.any(String) }
+    });
+  });
+
+  it("rejects a pathologically deeply nested (but acyclic) array without throwing", () => {
+    let deep: unknown = "leaf";
+    for (let i = 0; i < 100_000; i++) deep = [deep];
+    expect(() => restorePlayer(document, { ...snapshot, position: deep })).not.toThrow();
+    expect(restorePlayer(document, { ...snapshot, position: deep })).toEqual({
+      ok: false,
+      error: { kind: "malformedSnapshot", reason: expect.any(String) }
+    });
+  });
+});
