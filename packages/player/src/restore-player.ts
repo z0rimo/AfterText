@@ -45,8 +45,14 @@ function restored(state: PlayerState): RestorePlayerResult {
 export function restorePlayer(document: StoryDocument, snapshot: unknown): RestorePlayerResult {
   try {
     return restorePlayerUnchecked(document, snapshot);
-  } catch (error) {
-    return malformed(`snapshot could not be inspected: ${error instanceof Error ? error.message : String(error)}`);
+  } catch {
+    // Never format the caught value: a hostile `unknown` input can throw a
+    // non-Error whose own `toString`/`Symbol.toPrimitive` throws, or an
+    // Error-like object with a throwing `message` getter — invoking either
+    // while building the reason string would itself throw, right back out
+    // of this handler. A fixed reason costs nothing (it's optional on
+    // `malformedSnapshot`) and can never fail to produce.
+    return malformed("snapshot could not be inspected.");
   }
 }
 

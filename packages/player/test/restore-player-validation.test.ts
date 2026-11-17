@@ -401,3 +401,37 @@ describe("untrusted snapshot accessor safety (Codex-reported P2, docs/CORE_SPEC.
     expect(restorePlayer(document, proxy)).toEqual({ ok: false, error: { kind: "malformedSnapshot", reason: expect.any(String) } });
   });
 });
+
+describe("catch-handler safety for hostile thrown values (Codex-reported P2, docs/CORE_SPEC.md Section 33.8)", () => {
+  const { document } = freshSnapshot();
+
+  it("rejects a getter that throws a non-Error whose toString itself throws, without propagating either exception", () => {
+    const hostile: Record<string, unknown> = {};
+    Object.defineProperty(hostile, "formatVersion", {
+      get() {
+        throw { toString: () => { throw new Error("second boom"); } }; // eslint-disable-line @typescript-eslint/no-throw-literal
+      },
+      enumerable: true
+    });
+    expect(() => restorePlayer(document, hostile)).not.toThrow();
+    expect(restorePlayer(document, hostile)).toEqual({ ok: false, error: { kind: "malformedSnapshot", reason: expect.any(String) } });
+  });
+
+  it("rejects a getter that throws an Error-like object with a throwing message getter, without propagating either exception", () => {
+    const hostile: Record<string, unknown> = {};
+    Object.defineProperty(hostile, "formatVersion", {
+      get() {
+        const errorLike = Object.create(Error.prototype);
+        Object.defineProperty(errorLike, "message", {
+          get() {
+            throw new Error("second boom");
+          }
+        });
+        throw errorLike;
+      },
+      enumerable: true
+    });
+    expect(() => restorePlayer(document, hostile)).not.toThrow();
+    expect(restorePlayer(document, hostile)).toEqual({ ok: false, error: { kind: "malformedSnapshot", reason: expect.any(String) } });
+  });
+});
