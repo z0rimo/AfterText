@@ -7,7 +7,7 @@ A web-native, prose-first engine and toolchain for interactive stories and visua
 [![License: MIT](https://img.shields.io/github/license/z0rimo/AfterText)](LICENSE)
 [![Node](https://img.shields.io/badge/node-%3E%3D22.12-339933)](CONTRIBUTING.md)
 
-> **v0.3.0 — Sprite Stage and Dialogue.** The core pipeline works end to end, but the project is early: the language, APIs, and feature set are small and will change. It is not production-ready.
+> **v0.4.0 — Save/Restore.** The core pipeline now supports JSON-compatible session snapshots and restore for both the headless Player and the React Web Renderer. The project is still early: the language, APIs, and feature set are small and will change. It is not production-ready.
 
 You write a story as ordinary prose and add a few declarative directives (`@scene`, `@choice`, `@set`, `@background`, ...). The story is meant to stay readable as prose even without the presentation directives. AfterText compiles it into a validated, typed story document, runs it with a pure headless runtime, and can play it in the browser with a React component. Story logic is declarative: `.at` files cannot execute arbitrary JavaScript.
 
@@ -112,6 +112,54 @@ export function App() {
 
 `resolveAsset` maps the opaque asset references used by `@background`, `@layer`, `@music`, and `@sfx` to URLs; by default a reference is used as-is.
 
+## Save and restore
+
+AfterText produces and restores snapshot values — it does not own where they are stored. `snapshotPlayer`/`restorePlayer` (headless) and `AfterTextPlayerHandle.getSnapshot`/`restoreSnapshot` (React) are the host-facing boundary; the values they exchange are plain JSON-compatible data that can be round-tripped with `JSON.stringify`/`JSON.parse` and persisted anywhere the host chooses — a file, a database, `localStorage`, a server — AfterText has no opinion. Restore validates its input (including that the snapshot matches the document it is being restored against) and never throws; a failed restore is returned as an ordinary `{ ok: false, error }` value. Every snapshot carries a `formatVersion` used for that validation, but v0.4 makes no promise of compatibility across future AfterText versions — a snapshot is not guaranteed to restore correctly after a later upgrade.
+
+**Headless:**
+
+```ts
+import { snapshotPlayer, restorePlayer } from "@aftertext/player";
+
+const snapshot = snapshotPlayer(document, player);
+const serialized = JSON.stringify(snapshot);
+
+// Host stores `serialized` wherever it chooses.
+
+const restored = restorePlayer(document, JSON.parse(serialized));
+if (!restored.ok) {
+  console.error(restored.error);
+} else {
+  player = restored.state;
+}
+```
+
+**React:**
+
+```tsx
+import { useRef } from "react";
+import { AfterTextPlayer, type AfterTextPlayerHandle } from "@aftertext/web-renderer";
+
+export function Story() {
+  const playerRef = useRef<AfterTextPlayerHandle>(null);
+
+  const save = () => {
+    const snapshot = playerRef.current?.getSnapshot();
+    if (snapshot) {
+      const serialized = JSON.stringify(snapshot);
+      // Store `serialized` in host-owned storage.
+    }
+  };
+
+  const load = (serialized: string) => {
+    const result = playerRef.current?.restoreSnapshot(JSON.parse(serialized));
+    if (result && !result.ok) console.error(result.error);
+  };
+
+  return <AfterTextPlayer ref={playerRef} document={document} />;
+}
+```
+
 ## What works today
 
 - Prose / Markdown-derived content and frontmatter (`title`, `entry`, initial `state`)
@@ -123,10 +171,11 @@ export function App() {
 - Headless runtime and player (pure, step-by-step)
 - React web renderer
 - Exact source locations (spans) in the AST, for tools that edit `.at` source
+- Save/Restore: JSON-compatible Player snapshots and React renderer snapshots, with document validation and host-owned persistence
 
 ## Not yet
 
-Not implemented, planned for later releases: visual transitions, free x/y sprite positioning, scale/rotation, sprite animation, save/load, history/backlog, auto and skip, voice, multi-file projects, and editor/tooling integrations.
+Not implemented, planned for later releases: visual transitions, free x/y sprite positioning, scale/rotation, sprite animation, history/backlog, auto and skip, voice, multi-file projects, editor/tooling integrations, and built-in save slots, storage backends, autosave, or cross-version save migration.
 
 ## Packages
 

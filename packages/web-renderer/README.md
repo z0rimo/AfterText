@@ -3,7 +3,7 @@
 A React renderer for playing a compiled AfterText `StoryDocument` in the
 browser.
 
-> v0.3.0: the public API and presentation feature set are early and
+> v0.4.0: the public API and presentation feature set are early and
 > may change.
 
 ## Install
@@ -34,6 +34,59 @@ export function Story() {
 
 The renderer owns presentation only. Compilation and diagnostics remain the
 host application's responsibility.
+
+## Save and restore
+
+`AfterTextPlayer` is ref-capable: pass a ref typed as `AfterTextPlayerHandle`
+to get `getSnapshot()`/`restoreSnapshot()`.
+
+```tsx
+import { useRef } from "react";
+import { AfterTextPlayer, type AfterTextPlayerHandle } from "@aftertext/web-renderer";
+
+export function Story() {
+  const ref = useRef<AfterTextPlayerHandle>(null);
+
+  return (
+    <AfterTextPlayer
+      ref={ref}
+      document={document}
+      resolveAsset={(asset) => `/assets/${asset}`}
+    />
+  );
+}
+```
+
+```ts
+const snapshot = ref.current?.getSnapshot();
+// snapshot is a plain, JSON-compatible AfterTextPlayerSnapshot — store it
+// wherever the host chooses, e.g. JSON.stringify(snapshot).
+
+const result = ref.current?.restoreSnapshot(parsedSnapshot);
+if (result && !result.ok) {
+  console.error(result.error);
+}
+```
+
+- An `AfterTextPlayerSnapshot` combines a Player snapshot (narrative
+  position) with a Presentation snapshot (background, layer, camera,
+  music, sprites). Both are plain, JSON-compatible data.
+- `restoreSnapshot` accepts `snapshot: unknown` and is synchronous; it
+  validates its input and never throws — an ordinary malformed or
+  mismatched snapshot comes back as `{ ok: false, error }`, not an
+  exception.
+- Timers, audio playback objects, and focus refs are not persisted:
+  restoring a snapshot re-establishes the described Presentation state
+  from scratch rather than resuming elapsed timer time or audio playback
+  position.
+- As with `@aftertext/player`, storage is entirely host-owned, and
+  `formatVersion` is validated but does not guarantee compatibility with
+  snapshots taken by a different package version.
+
+**Compatibility note:** in v0.4.0, `AfterTextPlayer` is implemented with
+`React.forwardRef` so the same ref-capable API works on both React 18 and
+19. Ordinary `<AfterTextPlayer ... />` JSX usage is unaffected. Calling
+`AfterTextPlayer(props)` directly as a function is not supported.
 
 ## Demo
 
