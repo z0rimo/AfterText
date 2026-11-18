@@ -68,12 +68,43 @@
         "union PresentationResult"
       ]
     },
+    "JsonValue": {
+      "kind": "type",
+      "members": [
+        "union false",
+        "union null",
+        "union number",
+        "union readonly JsonValue[]",
+        "union string",
+        "union true",
+        "union { readonly [key: string]: JsonValue; }"
+      ]
+    },
     "NavigationResult": {
       "kind": "interface",
       "members": [
         "readonly property from: string",
         "readonly property to: string",
         "readonly property type: \"navigation\""
+      ]
+    },
+    "PlayerRestoreError": {
+      "kind": "type",
+      "members": [
+        "union { readonly kind: \"documentMismatch\"; }",
+        "union { readonly kind: \"malformedSnapshot\"; readonly reason?: string; }",
+        "union { readonly kind: \"unresolvablePosition\"; readonly reason?: string; }",
+        "union { readonly kind: \"unsupportedFormatVersion\"; }"
+      ]
+    },
+    "PlayerSnapshot": {
+      "kind": "interface",
+      "members": [
+        "readonly property current: boolean | null | number | readonly JsonValue[] | string | { readonly [key: string]: JsonValue; }",
+        "readonly property documentFingerprint: string",
+        "readonly property formatVersion: 1",
+        "readonly property position: boolean | null | number | readonly JsonValue[] | string | { readonly [key: string]: JsonValue; }",
+        "readonly property runtimeState: RuntimeState"
       ]
     },
     "PlayerState": {
@@ -89,6 +120,13 @@
       "members": [
         "readonly property command: BackgroundCommand | CameraZoomCommand | HideSpriteCommand | LayerCommand | MusicCommand | PauseCommand | SfxCommand | ShowSpriteCommand",
         "readonly property type: \"presentation\""
+      ]
+    },
+    "RestorePlayerResult": {
+      "kind": "type",
+      "members": [
+        "union { readonly ok: false; readonly error: PlayerRestoreError; }",
+        "union { readonly ok: true; readonly state: PlayerState; }"
       ]
     },
     "RuntimeExecutionError": {
@@ -127,10 +165,22 @@
         "signature (StoryDocument) => PlayerState"
       ]
     },
+    "restorePlayer": {
+      "kind": "function",
+      "members": [
+        "signature (StoryDocument, unknown) => { readonly ok: false; readonly error: PlayerRestoreError; } | { readonly ok: true; readonly state: PlayerState; }"
+      ]
+    },
     "selectPlayerChoice": {
       "kind": "function",
       "members": [
         "signature (StoryDocument, PlayerState, number) => PlayerState"
+      ]
+    },
+    "snapshotPlayer": {
+      "kind": "function",
+      "members": [
+        "signature (StoryDocument, PlayerState) => PlayerSnapshot"
       ]
     }
   },

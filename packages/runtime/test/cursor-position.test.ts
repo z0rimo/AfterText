@@ -645,3 +645,59 @@ describe("JSON round-trip (docs/CORE_SPEC.md Section 33.4)", () => {
     expect(decoded.ok).toBe(true);
   });
 });
+
+describe("bounded/non-iterator-hijackable frame reads (Codex-reported P2, docs/CORE_SPEC.md Section 33.8)", () => {
+  const documentA = compileDoc("@scene s\nHi.\n");
+  const state = createRuntimeState(documentA);
+
+  it("reads a frames array Proxy by index, ignoring a Symbol.iterator that would yield indefinitely, without hanging", () => {
+    const realFrames = [{ kind: "scene", index: 0, visitRecorded: false }];
+    const hijacked = new Proxy(realFrames, {
+      get(target, prop, receiver) {
+        if (prop === Symbol.iterator) {
+          return function* () {
+            while (true) yield { kind: "scene", index: 0, visitRecorded: false };
+          };
+        }
+        return Reflect.get(target, prop, receiver);
+      }
+    });
+    const position = { sceneId: "s", frames: hijacked } as unknown as JsonValue;
+    const start = performance.now();
+    expect(() => fromCursorPosition(documentA, state, position, "error")).not.toThrow();
+    const result = fromCursorPosition(documentA, state, position, "error");
+    const elapsedMs = performance.now() - start;
+    // Indexed access reads realFrames[0] by its real, short .length — the
+    // malicious generator is never consumed, so this resolves normally.
+    expect(result.ok).toBe(true);
+    expect(elapsedMs).toBeLessThan(2000);
+  });
+
+  it("rejects a sparse frames array claiming an astronomical length quickly instead of scanning every index", () => {
+    const sparse = new Array(0xffffffff);
+    const position = { sceneId: "s", frames: sparse } as unknown as JsonValue;
+    const start = performance.now();
+    expect(() => fromCursorPosition(documentA, state, position, "error")).not.toThrow();
+    const result = fromCursorPosition(documentA, state, position, "error");
+    const elapsedMs = performance.now() - start;
+    expect(result).toEqual({ ok: false, reason: expect.any(String) });
+    expect(elapsedMs).toBeLessThan(2000);
+  });
+});
+
+describe("negative/non-integer reported frames lengths are rejected, not treated as empty (Codex-reported P2, docs/CORE_SPEC.md Section 33.8)", () => {
+  const documentA = compileDoc("@scene s\nHi.\n");
+  const state = createRuntimeState(documentA);
+
+  it("rejects a frames array Proxy reporting a negative length instead of treating it as empty", () => {
+    const hostile = new Proxy([{ kind: "scene", index: 0, visitRecorded: false }], {
+      get(target, prop, receiver) {
+        if (prop === "length") return -1;
+        return Reflect.get(target, prop, receiver);
+      }
+    });
+    const position = { sceneId: "s", frames: hostile } as unknown as JsonValue;
+    expect(() => fromCursorPosition(documentA, state, position, "error")).not.toThrow();
+    expect(fromCursorPosition(documentA, state, position, "error")).toEqual({ ok: false, reason: expect.any(String) });
+  });
+});
