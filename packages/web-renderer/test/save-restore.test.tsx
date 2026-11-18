@@ -375,8 +375,8 @@ describe("Independent-half atomic failure", () => {
 
     expect(result.ok).toBe(false);
     expect(ref.current!.getSnapshot()).toEqual(before);
-    expect(playSpy.mock.calls.length).toBe(playCallsBefore);
-    expect(pauseSpy.mock.calls.length).toBe(pauseCallsBefore);
+    expect(playSpy.mock.calls).toHaveLength(playCallsBefore);
+    expect(pauseSpy.mock.calls).toHaveLength(pauseCallsBefore);
     expect(document.activeElement).toBe(activeBefore);
 
     vi.restoreAllMocks();
@@ -429,12 +429,13 @@ describe("document replacement with ref support", () => {
 describe("audio cleanup on restore (Section 33.14)", () => {
   let playSpy: ReturnType<typeof vi.spyOn>;
   let pauseSpy: ReturnType<typeof vi.spyOn>;
-  let loadSpy: ReturnType<typeof vi.spyOn>;
 
   beforeEach(() => {
     playSpy = vi.spyOn(HTMLMediaElement.prototype, "play").mockResolvedValue(undefined);
     pauseSpy = vi.spyOn(HTMLMediaElement.prototype, "pause").mockImplementation(() => {});
-    loadSpy = vi.spyOn(HTMLMediaElement.prototype, "load").mockImplementation(() => {});
+    // `.load()` is mocked too (unasserted here) so jsdom's stub media
+    // element never surfaces a real-media-backend side effect.
+    vi.spyOn(HTMLMediaElement.prototype, "load").mockImplementation(() => {});
   });
 
   afterEach(() => {
@@ -452,7 +453,7 @@ describe("audio cleanup on restore (Section 33.14)", () => {
 
     const result = restore(ref, "not a valid snapshot at all");
     expect(result.ok).toBe(false);
-    expect(pauseSpy.mock.calls.length).toBe(pauseCallsBeforeRestore);
+    expect(pauseSpy.mock.calls).toHaveLength(pauseCallsBeforeRestore);
   });
 
   it("a failed restore does NOT stop an active Sfx instance", () => {
@@ -539,6 +540,20 @@ describe("timed Presentation restore (Section 33.13, 35-37)", () => {
     });
   }
 
+  /** Renders, starts, snapshots at the first timed suspension, lets its full duration elapse, then restores that same snapshot. */
+  function unlockThenRestore(storyDocument: StoryDocument): RefObject<AfterTextPlayerHandle | null> {
+    const ref = renderPlayer(storyDocument);
+    start();
+    const snapshot = ref.current!.getSnapshot();
+
+    advanceTime(1000);
+    expect(screen.getByRole("button", { name: "Continue" })).toBeInTheDocument();
+
+    const result = restore(ref, roundTrip(snapshot));
+    expect(result).toEqual({ ok: true });
+    return ref;
+  }
+
   it("Pause: restoring onto the same logical Pause suspension begins locked again, with a full fresh duration", () => {
     const ref = renderPlayer(compileDoc("@scene s\n@pause 1000ms\nAfter.\n"));
     start();
@@ -562,15 +577,7 @@ describe("timed Presentation restore (Section 33.13, 35-37)", () => {
   });
 
   it("timed Camera: restoring onto the same logical suspension begins locked again, with a full fresh duration", () => {
-    const ref = renderPlayer(compileDoc("@scene s\n@camera zoom to=1.5 duration=1000ms\nAfter.\n"));
-    start();
-    const snapshot = ref.current!.getSnapshot();
-
-    advanceTime(1000);
-    expect(screen.getByRole("button", { name: "Continue" })).toBeInTheDocument();
-
-    const result = restore(ref, roundTrip(snapshot));
-    expect(result).toEqual({ ok: true });
+    unlockThenRestore(compileDoc("@scene s\n@camera zoom to=1.5 duration=1000ms\nAfter.\n"));
     expect(screen.queryByRole("button", { name: "Continue" })).not.toBeInTheDocument();
 
     advanceTime(1000);
@@ -600,15 +607,7 @@ describe("timed Presentation restore (Section 33.13, 35-37)", () => {
   });
 
   it("restoring over a currently UNLOCKED timer: the restored gate starts locked, with no leaked unlocked state", () => {
-    const ref = renderPlayer(compileDoc("@scene s\n@pause 1000ms\nAfter.\n"));
-    start();
-    const snapshot = ref.current!.getSnapshot();
-
-    advanceTime(1000);
-    expect(screen.getByRole("button", { name: "Continue" })).toBeInTheDocument();
-
-    const result = restore(ref, roundTrip(snapshot));
-    expect(result).toEqual({ ok: true });
+    unlockThenRestore(compileDoc("@scene s\n@pause 1000ms\nAfter.\n"));
     expect(screen.queryByRole("button", { name: "Continue" })).not.toBeInTheDocument();
     expect(screen.getByText("Waiting…")).toBeInTheDocument();
 
