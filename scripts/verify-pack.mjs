@@ -90,13 +90,21 @@ console.log("headless ok");
         vite: "^5.4.21"
       }
     );
-    write(web, "main.tsx", `import { compile } from "@aftertext/compiler";
+    write(web, "main.tsx", `import { createRef } from "react";
+import { compile } from "@aftertext/compiler";
 import { AfterTextPlayer } from "@aftertext/web-renderer";
+import type { AfterTextPlayerHandle } from "@aftertext/web-renderer";
 import { renderToString } from "react-dom/server";
 
 const { document } = compile("---\\ntitle: T\\n---\\n\\n@scene start\\n\\nHello.\\n");
-export const html = renderToString(<AfterTextPlayer document={document} />);
+// forwardRef ref support (docs/CORE_SPEC.md Section 33.11): the ref/handle
+// shape must typecheck identically across both ends of the declared React
+// peer range, not merely ordinary JSX usage without a ref.
+const ref = createRef<AfterTextPlayerHandle>();
+export const html = renderToString(<AfterTextPlayer ref={ref} document={document} />);
 if (html.length === 0) throw new Error("expected rendered HTML");
+ref.current?.getSnapshot();
+ref.current?.restoreSnapshot({});
 console.log("web React ${reactMajor} ok");
 `);
     run("npm", ["install", "--no-audit", "--no-fund"], web);
