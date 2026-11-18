@@ -69,9 +69,13 @@ export const INITIAL_PRESENTATION_STATE: PresentationState = {
 /**
  * A valid renderer zoom is any finite number greater than zero (Section
  * 22.4). `0`, negative values, `Infinity`/`-Infinity`, and (defensively)
- * `NaN` are all invalid.
+ * `NaN` are all invalid. Exported (module-internal to the package, not part
+ * of the public barrel) so Save/Restore's `cameraZoom` validation
+ * (`snapshot-types.ts`) and presentation/current cross-validation
+ * (`presentation-snapshot.ts`, Section 33.12) share this exact rule rather
+ * than duplicating it.
  */
-function isValidCameraZoom(to: number): boolean {
+export function isValidCameraZoom(to: number): boolean {
   return Number.isFinite(to) && to > 0;
 }
 

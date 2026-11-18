@@ -1,7 +1,7 @@
 import type { StoryDocument } from "@aftertext/compiler";
-import { advancePlayer, createPlayer, selectPlayerChoice } from "@aftertext/player";
+import { advancePlayer, createPlayer, restorePlayer, selectPlayerChoice, snapshotPlayer } from "@aftertext/player";
 import type { PlayerState } from "@aftertext/player";
-import { useEffect, useRef, useState, type ReactElement, type ReactNode, type Ref } from "react";
+import { forwardRef, useEffect, useImperativeHandle, useRef, useState, type ReactElement, type ReactNode, type Ref } from "react";
 import { ChoiceView } from "./choice-view.js";
 import { CompletedView } from "./completed-view.js";
 import { ContentView } from "./content-view.js";
@@ -10,6 +10,8 @@ import { ErrorView } from "./error-view.js";
 import { PresentationView } from "./presentation-view.js";
 import { PresentationSurface } from "./presentation-surface.js";
 import { acceptPlayerState, INITIAL_PRESENTATION_STATE, type PresentationState } from "./presentation-state.js";
+import { presentationStateMatchesCommand, restorePresentation, snapshotPresentation } from "./presentation-snapshot.js";
+import { isPlainRecord, type AfterTextPlayerHandle, type AfterTextPlayerRestoreResult, type AfterTextPlayerSnapshot } from "./snapshot-types.js";
 import {
   getCurrentTimedPresentation,
   getTimedDurationMs,
@@ -51,6 +53,19 @@ interface RendererSession {
   readonly player: PlayerState;
   readonly presentation: PresentationState;
   readonly timedGate: TimedPresentationGate;
+  /**
+   * Bumped only by a successful `restoreSnapshot` (docs/CORE_SPEC.md
+   * Section 33.13); otherwise preserved unchanged by ordinary
+   * advance/select and reset to `0` by Restart's own fresh
+   * `createSession`. A restore can target the same document and the same
+   * logical timed suspension already displayed; including this in the
+   * timed/focus effects' dependency arrays guarantees a fresh timer and a
+   * fresh focus opportunity on every successful restore without relying
+   * on `currentTimed`/`currentResult` happening to be a new object
+   * reference. Ephemeral renderer state only — never persisted, never
+   * exposed publicly.
+   */
+  readonly restoreGeneration: number;
 }
 
 function createSession(document: StoryDocument): RendererSession {
@@ -58,7 +73,8 @@ function createSession(document: StoryDocument): RendererSession {
     activeDocument: document,
     player: createPlayer(document),
     presentation: INITIAL_PRESENTATION_STATE,
-    timedGate: INITIAL_TIMED_GATE
+    timedGate: INITIAL_TIMED_GATE,
+    restoreGeneration: 0
   };
 }
 
@@ -89,12 +105,20 @@ const identityResolveAsset: NonNullable<AfterTextPlayerProps["resolveAsset"]> = 
  * (Section 23.30). Every narrative transition still delegates to
  * `createPlayer`/`advancePlayer`/`selectPlayerChoice`; this component
  * never evaluates expressions, filters Choices, resolves Variants,
- * mutates StoryState, or touches Reader Memory itself.
+ * mutates StoryState, or touches Reader Memory itself. Ref-capable via
+ * `forwardRef`/`useImperativeHandle` (docs/CORE_SPEC.md Section 33.11):
+ * `forwardRef` is required, not a stylistic choice, because React 19's
+ * ref-as-a-plain-prop convention does not work on React 18, which this
+ * package's peer range still supports. This is a real, narrow, accepted
+ * exception to additivity (Section 33.11, 33.18) — `AfterTextPlayer`'s
+ * own exported shape changes from an ordinary function to a
+ * `ForwardRefExoticComponent`; ordinary JSX usage without a ref (
+ * `<AfterTextPlayer ... />`) is unaffected.
  */
-export function AfterTextPlayer({
-  document: storyDocument,
-  resolveAsset = identityResolveAsset
-}: AfterTextPlayerProps): ReactElement {
+export const AfterTextPlayer = forwardRef<AfterTextPlayerHandle, AfterTextPlayerProps>(function AfterTextPlayer(
+  { document: storyDocument, resolveAsset = identityResolveAsset },
+  ref
+): ReactElement {
   const [session, setSession] = useState<RendererSession>(() => createSession(storyDocument));
 
   if (storyDocument !== session.activeDocument) {
@@ -181,6 +205,84 @@ export function AfterTextPlayer({
     setSession(createSession(storyDocument));
   };
 
+  // Save/Restore (docs/CORE_SPEC.md Section 33.11-33.14). `getSnapshot`
+  // always composes the two independently-owned halves from
+  // `session.activeDocument`/`session.player` — never the raw
+  // `storyDocument` prop, which can transiently differ from the
+  // committed session during a document-replacement render — so the
+  // Player fingerprint and the Presentation snapshot can never
+  // accidentally mix documents.
+  const getSnapshot = (): AfterTextPlayerSnapshot => ({
+    player: snapshotPlayer(session.activeDocument, session.player),
+    presentation: snapshotPresentation(session.presentation)
+  });
+
+  // Validates both halves completely, and cross-validates them when the
+  // restored `current` is itself a Presentation suspension (Section
+  // 33.12), before mutating any live state — a restore either fully
+  // succeeds or has no observable effect, mirroring Restart's own atomic
+  // reset. On success, the restored Presentation state is installed
+  // directly, never routed back through `acceptPlayerState`/
+  // `applyPresentation`: that command was already applied before the
+  // snapshot was taken, and reapplying it would violate no-double-
+  // application (Section 33.9). `timedGate` resets to
+  // `INITIAL_TIMED_GATE` and `restoreGeneration` increments so a
+  // restored timed Presentation always begins fresh and locked, even
+  // when it targets the same logical suspension already on screen
+  // (Section 33.13, see the timed effect below). Audio cleanup mirrors
+  // Restart's (Section 33.14) and runs only once every check has passed
+  // — a failed restore never stops the live session's audio, changes its
+  // state, or moves focus.
+  const restoreSnapshot = (snapshot: unknown): AfterTextPlayerRestoreResult => {
+    const playerHalf = isPlainRecord(snapshot) ? snapshot.player : undefined;
+    const presentationHalf = isPlainRecord(snapshot) ? snapshot.presentation : undefined;
+
+    const playerResult = restorePlayer(session.activeDocument, playerHalf);
+    if (!playerResult.ok) {
+      return { ok: false, error: { kind: "invalidPlayerSnapshot", detail: playerResult.error } };
+    }
+
+    const presentationResult = restorePresentation(presentationHalf);
+    if (!presentationResult.ok) {
+      return { ok: false, error: { kind: "invalidPresentationSnapshot", detail: presentationResult.error } };
+    }
+
+    const restoredCurrent = playerResult.state.current;
+    if (
+      restoredCurrent?.type === "presentation" &&
+      !presentationStateMatchesCommand(restoredCurrent.command, presentationResult.state)
+    ) {
+      return {
+        ok: false,
+        error: {
+          kind: "invalidPresentationSnapshot",
+          detail: {
+            kind: "malformedSnapshot",
+            reason: "presentation state is inconsistent with the restored current Presentation command."
+          }
+        }
+      };
+    }
+
+    stopMusicElement(musicElementRef.current);
+    stopAndClearSfx(activeSfxRef.current);
+    pendingFocusRef.current = true;
+    setSession({
+      activeDocument: session.activeDocument,
+      player: playerResult.state,
+      presentation: presentationResult.state,
+      timedGate: INITIAL_TIMED_GATE,
+      restoreGeneration: session.restoreGeneration + 1
+    });
+    return { ok: true };
+  };
+
+  // No dependency array: always rebuilds this small wrapper object so
+  // `getSnapshot`/`restoreSnapshot` close over the current render's
+  // `session`, never a stale one (Section 45) — cheap, since the actual
+  // snapshot/restore work only runs when a host calls one of these.
+  useImperativeHandle(ref, () => ({ getSnapshot, restoreSnapshot }));
+
   const currentTimed = getCurrentTimedPresentation(session.player);
   useEffect(() => {
     if (currentTimed === null) return;
@@ -203,8 +305,15 @@ export function AfterTextPlayer({
       });
     });
 
+    // `session.restoreGeneration` (in the dependency array below) is
+    // included so a successful restore always starts a fresh timer and
+    // cancels any stale one, even when it targets the same logical timed
+    // suspension already displayed (Section 33.13, 35-36) — restoring
+    // resets `timedGate` to `INITIAL_TIMED_GATE` above, and this effect
+    // re-running is what actually claims it locked and schedules the new
+    // wait.
     return () => wait.cancel();
-  }, [currentTimed]);
+  }, [currentTimed, session.restoreGeneration]);
 
   const timedUnlocked = isTimedPresentationUnlocked(currentTimed, session.timedGate);
 
@@ -223,7 +332,11 @@ export function AfterTextPlayer({
     if (active === null || active === target.ownerDocument.body || rootRef.current?.contains(active)) {
       target.focus();
     }
-  }, [currentResult, timedUnlocked]);
+    // `session.restoreGeneration` is included so a successful restore
+    // always offers a fresh focus opportunity (Section 42), even when
+    // the restored result is semantically identical to the one already
+    // displayed.
+  }, [currentResult, timedUnlocked, session.restoreGeneration]);
   const cameraTransitionMs = cameraAuthoredTransitionMs(session.player);
 
   return (
@@ -237,7 +350,7 @@ export function AfterTextPlayer({
       </PresentationSurface>
     </div>
   );
-}
+});
 
 function renderCurrent(
   player: PlayerState,

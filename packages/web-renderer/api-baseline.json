@@ -8,9 +8,16 @@
   },
   "exports": {
     "AfterTextPlayer": {
-      "kind": "function",
+      "kind": "const",
       "members": [
-        "signature (AfterTextPlayerProps) => ReactElement<unknown, string | JSXElementConstructor<any>>"
+        "signature (AfterTextPlayerProps & RefAttributes<AfterTextPlayerHandle>) => Iterable<ReactNode> | Promise<string | number | bigint | boolean | ReactPortal | ReactElement<unknown, string | JSXElementConstructor<any>> | Iterable<ReactNode> | null | undefined> | ReactElement<unknown, string | JSXElementConstructor<any>> | ReactPortal | bigint | boolean | null | number | string | undefined"
+      ]
+    },
+    "AfterTextPlayerHandle": {
+      "kind": "interface",
+      "members": [
+        "method getSnapshot: () => AfterTextPlayerSnapshot",
+        "method restoreSnapshot: (unknown) => { readonly ok: false; readonly error: AfterTextPlayerRestoreError; } | { readonly ok: true; }"
       ]
     },
     "AfterTextPlayerProps": {
@@ -18,6 +25,45 @@
       "members": [
         "readonly property document: StoryDocument",
         "readonly property resolveAsset?: ((string, \"background\" | \"layer\" | \"music\" | \"sfx\" | \"sprite\") => null | string)"
+      ]
+    },
+    "AfterTextPlayerRestoreError": {
+      "kind": "type",
+      "members": [
+        "union { readonly kind: \"invalidPlayerSnapshot\"; readonly detail: PlayerRestoreError; }",
+        "union { readonly kind: \"invalidPresentationSnapshot\"; readonly detail: PresentationRestoreError; }"
+      ]
+    },
+    "AfterTextPlayerRestoreResult": {
+      "kind": "type",
+      "members": [
+        "union { readonly ok: false; readonly error: AfterTextPlayerRestoreError; }",
+        "union { readonly ok: true; }"
+      ]
+    },
+    "AfterTextPlayerSnapshot": {
+      "kind": "interface",
+      "members": [
+        "readonly property player: PlayerSnapshot",
+        "readonly property presentation: PresentationSnapshot"
+      ]
+    },
+    "PresentationRestoreError": {
+      "kind": "type",
+      "members": [
+        "union { readonly kind: \"malformedSnapshot\"; readonly reason: string; }",
+        "union { readonly kind: \"unsupportedFormatVersion\"; }"
+      ]
+    },
+    "PresentationSnapshot": {
+      "kind": "interface",
+      "members": [
+        "readonly property background: null | string",
+        "readonly property cameraZoom: number",
+        "readonly property formatVersion: 1",
+        "readonly property layer: null | string",
+        "readonly property music: null | { readonly track: string; readonly volume?: number; }",
+        "readonly property sprites: readonly { readonly id: string; readonly image: string; readonly position: \"left\" | \"center\" | \"right\"; }[]"
       ]
     }
   },
